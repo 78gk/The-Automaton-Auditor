@@ -1,145 +1,276 @@
 # Automaton Auditor — Interim Architecture Report
-**FDE Challenge Week 2 | Interim Submission | Wednesday**
+
+---
+
+| Field | Value |
+|---|---|
+| **Project** | FDE Challenge Week 2 — The Automaton Auditor |
+| **Version** | 0.1.0 (Interim) |
+| **Submission Type** | Wednesday Interim |
+| **Date** | 2026-02-25 |
+| **Author** | FDE Candidate — GitHub: [78gk](https://github.com/78gk) |
+| **Repository** | https://github.com/78gk/The-Automaton-Auditor |
+| **Status** | Detective Layer Complete · Judicial Layer Scheduled (Thu–Sat) |
 
 ---
 
 ## Executive Summary
 
-The **Automaton Auditor** is a production-grade hierarchical multi-agent swarm built with LangGraph, designed to perform forensic quality assurance on AI-generated codebases. It implements a **Digital Courtroom** metaphor: Detective agents collect objective forensic evidence, Judge agents debate that evidence through distinct adversarial personas, and a Chief Justice synthesizes a final deterministic verdict.
+The **Automaton Auditor** is a production-grade hierarchical multi-agent swarm built with LangGraph, designed to perform forensic quality assurance on AI-generated codebases. It operationalizes the **Digital Courtroom** metaphor across three distinct layers:
 
-This interim report documents the architectural decisions made during Phase 0 (Infrastructure) and Phase 1/2 (Detective Layer + Forensic Tools), along with a concrete plan for the Judicial Layer and Synthesis Engine to be completed by Saturday.
+- **Detective Layer** — three parallel agents (`RepoInvestigator`, `DocAnalyst`, `VisionInspector`) collect objective forensic facts using AST parsing, Git log analysis, and RAG-lite PDF ingestion. They produce typed `Evidence` objects — no opinions, no scores.
+- **Judicial Layer** — three adversarial judges (`Prosecutor`, `Defense`, `TechLead`) independently evaluate the same evidence through distinct philosophical lenses, producing structured `JudicialOpinion` objects via `.with_structured_output()`.
+- **Supreme Court** — the `ChiefJustice` node applies **deterministic Python rules** (not LLM averaging) to synthesize a final `AuditReport` in Markdown.
+
+This interim report documents the architectural decisions made during Phase 0–2 (Infrastructure + Detective Layer), the StateGraph orchestration design, known gaps, and a risk-mitigated completion plan for the Judicial and Synthesis layers.
 
 ---
 
 ## 1. Architecture Decisions
 
-### 1.1 Why Pydantic Over Plain Dicts
+Each decision follows the format: **Context → Options Considered → Selected Solution → Impact**.
 
-**Decision:** All state objects — `Evidence`, `JudicialOpinion`, `CriterionResult`, `AuditReport`, and `AgentState` — use Pydantic `BaseModel` or `TypedDict` with strict field typing.
+---
 
-**Rationale:**
-- **Schema Enforcement at Construction Time:** A `JudicialOpinion` with `score: int = Field(ge=1, le=5)` will raise a `ValidationError` immediately if a judge returns a score of 6 or "five". This prevents silent data corruption flowing downstream through the graph.
-- **Parallel Safety with Annotated Reducers:** LangGraph requires explicit reducer functions when multiple parallel agents write to the same state key. We use:
-  - `Annotated[Dict[str, List[Evidence]], operator.ior]` — dict union merge, so each Detective writes to its own key (`"repo"`, `"doc"`, `"vision"`) without overwriting others.
-  - `Annotated[List[JudicialOpinion], operator.add]` — list extend, so each Judge appends its opinions without overwriting.
-- **Self-Documenting API:** Pydantic models with `Field(description=...)` annotations serve as living documentation for every agent's expected input/output contract.
+### 1.1 State Management: Pydantic BaseModel + TypedDict with Annotated Reducers
 
-Without Pydantic, parallel agents writing plain dicts would cause silent overwrites — the last agent to finish would erase all previous agents' work.
+**Context & Problem:**
+A multi-agent swarm with 6+ parallel agents all writing to a single shared state object. The core risk: without explicit merge semantics, the last agent to finish overwrites all others' data — a silent, catastrophic data loss that produces no error and is invisible at runtime.
 
-### 1.2 Why AST Parsing Over Regex
+**Options Considered:**
 
-**Decision:** `src/tools/repo_tools.py` uses Python's built-in `ast` module to analyze code structure, not regex.
+| Option | Pros | Cons |
+|---|---|---|
+| **Plain Python dicts** | Zero boilerplate, familiar | Silent overwrites in parallel, no schema, no validation, impossible to audit |
+| **Python dataclasses** | Typed, lightweight | No field-level validators, no `ge`/`le` constraints, no JSON serialization |
+| **TypedDict only** | LangGraph-native, minimal | No runtime validation, no `Field(ge=1, le=5)` enforcement |
+| **Pydantic BaseModel + TypedDict with Annotated reducers** ✅ | Runtime validation, reducer semantics, self-documenting, LangGraph-compatible | Slightly more verbose |
 
-**Rationale:**
-- **Structural Verification:** Regex matches text patterns. AST matches code *structure*. A regex for `StateGraph` would match a comment `# StateGraph is not used here` or a string `"StateGraph"`. The AST visitor `GraphStructureVisitor` only matches when `StateGraph(AgentState)` is actually *instantiated as a call expression*.
-- **Fan-Out Detection:** To detect parallel execution, we parse `builder.add_edge()` calls and build a graph of source→target relationships. Nodes with multiple outgoing edges are fan-out points; nodes with multiple incoming edges are fan-in points. This is impossible to determine reliably with regex.
-- **Security:** AST parsing cannot be fooled by obfuscated strings or multi-line concatenations that regex would miss.
+**Selected Solution & Justification:**
+- `AgentState` as `TypedDict` (required by LangGraph's `StateGraph`)
+- All data objects (`Evidence`, `JudicialOpinion`, `CriterionResult`, `AuditReport`) as Pydantic `BaseModel`
+- `Annotated[Dict[str, List[Evidence]], operator.ior]` — dict union merge: each Detective writes to its own key (`"repo"`, `"doc"`, `"vision"`) without overwriting others
+- `Annotated[List[JudicialOpinion], operator.add]` — list extend: each Judge appends without overwriting
+- `Field(ge=1, le=5)` on `JudicialOpinion.score` raises `ValidationError` at construction time if a Judge LLM returns `"five"` or `6`
 
-Implemented visitors:
-- `GraphStructureVisitor` — detects `StateGraph`, `add_edge`, `add_conditional_edges`, `add_node`, fan-out/fan-in topology
-- `PydanticModelVisitor` — detects `BaseModel` subclasses, `TypedDict` subclasses, `operator.add`/`operator.ior` usage
-- `SecurityVisitor` — detects `os.system()` violations, `tempfile` usage, `subprocess.run()` usage
+**Impact:**
+- **Scalability:** Adding a 4th Detective only requires writing to a new dict key — zero collision risk
+- **Maintainability:** `Field(description=...)` annotations serve as living API documentation between agents
+- **Security:** Schema validation prevents malformed LLM outputs from propagating silently through the graph
 
-### 1.3 Sandboxing Strategy
+---
 
-**Decision:** All git clone operations use `tempfile.TemporaryDirectory()` as a sandbox context manager.
+### 1.2 Code Analysis: AST Parsing over Regex
 
-**Rationale:**
-- The auditor clones *unknown, potentially hostile* repositories. Cloning into the live working directory risks:
-  - Path traversal attacks (malicious `.git/hooks`)
-  - Overwriting source files of the auditor itself
-  - Leaving persistent artifacts on disk
-- `tempfile.TemporaryDirectory()` creates an OS-managed isolated directory that is **automatically deleted** when the context exits, even on exception.
-- `subprocess.run()` with `capture_output=True` is used instead of `os.system()` — this captures stdout/stderr, checks return codes, and never opens a shell.
+**Context & Problem:**
+To forensically verify that a target repo *actually implements* the required architecture (not just mentions it), we must analyze code structure. The question: use pattern matching (regex) or structural parsing (AST)?
 
+**Options Considered:**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Regex** | Simple, fast, no dependencies | Matches comments/strings, false positives, cannot detect topology, fooled by multi-line |
+| **String search (`in` operator)** | Trivial to implement | Same issues as regex, worse precision |
+| **LLM-based code analysis** | Flexible, understands semantics | Non-deterministic, expensive, cannot be audited, violates "objective facts only" principle |
+| **Python `ast` module** ✅ | Structural, deterministic, language-aware, no false positives from comments | Requires Python source (not bytecode), more complex visitor pattern |
+
+**Selected Solution & Justification:**
+Three purpose-built AST visitor classes:
+- `GraphStructureVisitor` — parses `StateGraph`, `add_edge`, `add_conditional_edges`, `add_node` as *call expressions*, then reconstructs the edge graph to detect fan-out (node with multiple outgoing edges) and fan-in (node with multiple incoming edges) topology
+- `PydanticModelVisitor` — detects `BaseModel`/`TypedDict` subclasses and `operator.add`/`operator.ior` in `Annotated` type hints
+- `SecurityVisitor` — flags `os.system()` (call expression, not string match), confirms `tempfile.TemporaryDirectory()` and `subprocess.run()`
+
+**Impact:**
+- **Scalability:** AST visitors can be extended to detect any new pattern (e.g., `.with_structured_output()`, `.bind_tools()`) without regex maintenance
+- **Maintainability:** Each visitor is a single-responsibility class, independently testable
+- **Security:** Cannot be fooled by adversarial code that writes `StateGraph` in a comment to game a regex detector
+
+---
+
+### 1.3 Sandboxing: `tempfile.TemporaryDirectory()` + `subprocess.run()`
+
+**Context & Problem:**
+The auditor clones *unknown, untrusted, potentially hostile* repositories from the internet. The naive approach — `os.system(f"git clone {url}")` into the working directory — introduces serious security risks.
+
+**Options Considered:**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **`os.system()` to CWD** | One line | Shell injection, pollutes working dir, no error handling, malicious `.git/hooks` can execute |
+| **`subprocess.run()` to CWD** | Better error handling | Still pollutes working dir, `.git/hooks` risk |
+| **Docker container per clone** | Maximum isolation | Complex setup, CI/CD dependency, overkill for this scope |
+| **`tempfile.TemporaryDirectory()` + `subprocess.run()`** ✅ | OS-managed sandbox, auto-cleaned on exit/exception, no shell injection, full error capture | Requires careful context manager discipline |
+
+**Selected Solution & Justification:**
 ```python
 with tempfile.TemporaryDirectory() as tmp_dir:
     clone_target = str(Path(tmp_dir) / "repo")
     success, msg = clone_repo(repo_url, clone_target)
-    # All analysis happens here — auto-cleaned on exit
+    # All analysis runs here — directory auto-deleted on exit or exception
 ```
+- `subprocess.run(["git", "clone", ...], capture_output=True)` — no shell, no injection surface
+- `timeout=120` prevents hanging on slow repos
+- Context manager guarantees cleanup even if analysis raises an exception
 
-### 1.4 RAG-Lite PDF Ingestion
-
-**Decision:** `src/tools/doc_tools.py` uses `docling` for PDF parsing with a keyword-scored chunking retrieval (RAG-lite).
-
-**Rationale:**
-- PDFs can be large. Dumping the full text into an LLM context window is expensive and loses precision.
-- We chunk the document into 1000-char overlapping segments and score each chunk by query term overlap. This is a lightweight TF-IDF-style approach that works without a vector database for documents of this size.
-- `docling` handles complex PDFs with tables, images, and multi-column layouts — `pypdf` is included as a fallback.
-- Image extraction uses `pypdf` page image objects for the VisionInspector pipeline.
+**Impact:**
+- **Security:** Eliminates shell injection (URL is passed as a list element, not interpolated into a shell string). Malicious `.git/hooks` cannot escape the temp sandbox.
+- **Maintainability:** The pattern is idiomatic Python — any contributor immediately understands the security intent
+- **Scalability:** Can run multiple concurrent audits safely since each gets its own isolated temp directory
 
 ---
 
-## 2. Planned StateGraph Flow
+### 1.4 Document Ingestion: Docling + RAG-lite Chunked Retrieval
 
-```
-START
-  │
-  ▼
-ContextBuilder
-  │  (loads rubric.json — the agent's Constitution)
-  │
-  ├────────────────────┬────────────────────┐
-  ▼                    ▼                    ▼
-RepoInvestigator   DocAnalyst         VisionInspector
-(AST + Git)        (PDF + RAG)        (Diagrams)
-  │                    │                    │
-  └────────────────────┴────────────────────┘
-                        │
-                        ▼
-               EvidenceAggregator  ← Fan-In sync point
-               (cross-references PDF paths vs. repo files)
-                        │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-      Prosecutor     Defense       TechLead
-     (adversarial)  (forgiving)   (pragmatic)
-          │             │             │
-          └─────────────┴─────────────┘
-                        │
-                        ▼
-                  ChiefJustice
-            (deterministic synthesis)
-                        │
-                        ▼
-              Markdown Audit Report
-                       END
-```
+**Context & Problem:**
+The auditor must extract structured insight from PDF architectural reports of variable length and complexity. The challenge: how to retrieve *relevant* sections for specific forensic queries without dumping thousands of tokens into an LLM context window per query.
 
-**Key Parallel Patterns:**
-- **Detective Fan-Out:** `ContextBuilder → [RepoInvestigator || DocAnalyst || VisionInspector]`
-- **Detective Fan-In:** `[RepoInvestigator || DocAnalyst || VisionInspector] → EvidenceAggregator`
-- **Judge Fan-Out:** `EvidenceAggregator → [Prosecutor || Defense || TechLead]`
-- **Judge Fan-In:** `[Prosecutor || Defense || TechLead] → ChiefJustice`
+**Options Considered:**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Full-context dump to LLM** | Simple, no chunking logic | Expensive, hits context window limits, low precision on specific queries |
+| **Full RAG pipeline (embeddings + vector DB)** | Maximum precision | Requires embedding model + FAISS/Chroma setup, heavy dependency, overkill for single-doc use |
+| **LlamaIndex / LangChain document loaders** | High-level abstractions | Additional dependency, less control over chunking strategy |
+| **Docling + keyword-scored RAG-lite** ✅ | Handles complex PDFs (tables, images, multi-column), lightweight retrieval, no vector DB needed | Less semantically precise than embeddings |
+
+**Selected Solution & Justification:**
+- `docling` (`DocumentConverter`) handles complex PDF layouts, exports clean Markdown text
+- `pypdf` as fallback for environments where `docling` is unavailable
+- Text chunked into 1000-char segments with 200-char overlap to preserve cross-sentence context
+- Retrieval: TF-IDF-style term overlap scoring — chunks scored by query term frequency, top-k returned
+- Separate `analyze_theoretical_depth()` function with hardcoded forensic keyword lists + context extraction to distinguish substantive explanations from keyword drops
+
+**Impact:**
+- **Scalability:** Chunk size and overlap are configurable constants — can be tuned per document type
+- **Maintainability:** No vector DB dependency; the full pipeline works with zero external services
+- **Security:** PDF parsing is read-only with no code execution; `docling` → `pypdf` fallback ensures resilience
 
 ---
 
-## 3. Current Implementation Status (Interim)
+## 2. StateGraph Architecture
 
-### ✅ Completed (Wednesday)
+### 2.1 Full System Flow Diagram
 
-| Component | File | Key Features |
-|---|---|---|
-| Typed State | `src/state.py` | Evidence, JudicialOpinion, CriterionResult, AuditReport, AgentState with reducers |
-| Repo Tools | `src/tools/repo_tools.py` | Sandboxed clone, git log, AST graph/state/security analysis |
-| Doc Tools | `src/tools/doc_tools.py` | docling PDF ingestion, RAG-lite query, hallucination detection |
-| Detective Nodes | `src/nodes/detectives.py` | RepoInvestigator, DocAnalyst, VisionInspector, EvidenceAggregator |
-| Detective Graph | `src/graph.py` | Parallel fan-out/fan-in StateGraph, rubric loading, CLI entry |
-| Rubric | `rubric.json` | 10-dimension machine-readable constitution with synthesis rules |
-| Judicial Stubs | `src/nodes/judges.py` | Full Prosecutor, Defense, TechLead implementation with distinct prompts |
-| Synthesis Stub | `src/nodes/justice.py` | ChiefJustice with deterministic rules (security, fact, variance) |
+> **Legend:** Parallel branches (fan-out) shown as simultaneous paths. Fan-in synchronization nodes shown with multiple incoming arrows. Guard conditions shown in square brackets. Completed nodes (✅) are live in the interim build; scheduled nodes (🔄) are implemented but not yet wired into the graph.
 
-### 🔄 Known Gaps & Completion Plan
+```mermaid
+flowchart TD
+    START([🚀 START]) --> CB
 
-| Gap | Plan | Target Day |
-|---|---|---|
-| Judges not yet wired into graph.py | Add fan-out from EvidenceAggregator to 3 judges | Thursday |
-| ChiefJustice not wired to END | Add final node and Markdown serialization | Friday |
-| VisionInspector runs but LLM call optional | Wire multimodal LLM for diagram classification | Friday |
-| No self-audit report yet | Run agent against own repo | Saturday |
-| No peer-audit report yet | Run agent against assigned peer's repo | Saturday |
-| No interim PDF report images | Add architecture diagram | Wednesday (this doc) |
+    CB["**ContextBuilder** ✅\nLoads rubric.json Constitution\nInitializes AgentState"]
+
+    CB -->|Fan-Out| RI
+    CB -->|Fan-Out| DA
+    CB -->|Fan-Out| VI
+
+    RI["**RepoInvestigator** ✅\n─────────────────\nClones repo → tempfile sandbox\nGit log forensic analysis\nAST: graph topology\nAST: state model rigor\nAST: tool security scan\nOutput: evidences[repo]"]
+
+    DA["**DocAnalyst** ✅\n─────────────────\nDocling PDF ingestion\nRAG-lite chunk retrieval\nTheoretical depth scan\nFile path extraction\nOutput: evidences[doc]"]
+
+    VI["**VisionInspector** ✅\n─────────────────\nImage extraction from PDF\nMultimodal LLM diagram analysis\nParallel pattern detection\nOutput: evidences[vision]"]
+
+    RI -->|Fan-In| EA
+    DA -->|Fan-In| EA
+    VI -->|Fan-In| EA
+
+    EA["**EvidenceAggregator** ✅\n─────────────────\nCross-reference PDF paths vs repo\nHallucination rate computation\nEvidence summary logging\nState: evidences fully merged"]
+
+    EA -->|Fan-Out| PR
+    EA -->|Fan-Out| DE
+    EA -->|Fan-Out| TL
+
+    PR["**Prosecutor** 🔄\n─────────────────\nPersona: adversarial\nLLM.with_structured_output()\nFinds gaps & security flaws\nOutput: opinions += [JudicialOpinion]"]
+
+    DE["**Defense** 🔄\n─────────────────\nPersona: optimistic\nLLM.with_structured_output()\nRewards effort & intent\nOutput: opinions += [JudicialOpinion]"]
+
+    TL["**TechLead** 🔄\n─────────────────\nPersona: pragmatic\nLLM.with_structured_output()\nEvaluates maintainability\nOutput: opinions += [JudicialOpinion]"]
+
+    PR -->|Fan-In| CJ
+    DE -->|Fan-In| CJ
+    TL -->|Fan-In| CJ
+
+    CJ["**ChiefJustice** 🔄\n─────────────────\nRule of Security: cap at 3\nRule of Evidence: fact supremacy\nRule of Functionality: TechLead 2x\nVariance Rule: dissent if gap > 2\nOutput: AuditReport Markdown"]
+
+    CJ --> END([🏁 END])
+
+    EH["**ErrorHandler** 🔄\n[on clone failure]\nPartial report + error log"]
+    CB -->|Guard: invalid URL| EH
+    EH --> END
+
+    style START fill:#1a1a2e,color:#e0e0e0,stroke:#4a9eff
+    style END fill:#1a1a2e,color:#e0e0e0,stroke:#4a9eff
+    style CB fill:#16213e,color:#e0e0e0,stroke:#4a9eff
+    style RI fill:#0f3460,color:#e0e0e0,stroke:#4a9eff
+    style DA fill:#0f3460,color:#e0e0e0,stroke:#4a9eff
+    style VI fill:#0f3460,color:#e0e0e0,stroke:#4a9eff
+    style EA fill:#533483,color:#e0e0e0,stroke:#a855f7
+    style PR fill:#1a472a,color:#e0e0e0,stroke:#4ade80
+    style DE fill:#1a472a,color:#e0e0e0,stroke:#4ade80
+    style TL fill:#1a472a,color:#e0e0e0,stroke:#4ade80
+    style CJ fill:#7b2d00,color:#e0e0e0,stroke:#f97316
+    style EH fill:#3d0000,color:#e0e0e0,stroke:#ef4444
+```
+
+### 2.2 Parallel Execution Patterns
+
+| Pattern | Nodes Involved | Reducer Used | State Key |
+|---|---|---|---|
+| **Detective Fan-Out** | ContextBuilder → [RepoInvestigator ‖ DocAnalyst ‖ VisionInspector] | `operator.ior` (dict merge) | `evidences` |
+| **Detective Fan-In** | [RepoInvestigator ‖ DocAnalyst ‖ VisionInspector] → EvidenceAggregator | Auto-sync (LangGraph waits for all) | `evidences` |
+| **Judge Fan-Out** | EvidenceAggregator → [Prosecutor ‖ Defense ‖ TechLead] | `operator.add` (list extend) | `opinions` |
+| **Judge Fan-In** | [Prosecutor ‖ Defense ‖ TechLead] → ChiefJustice | Auto-sync (LangGraph waits for all) | `opinions` |
+
+### 2.3 Guard Conditions & Transitions
+
+| Trigger | Guard Condition | Transition | Effect |
+|---|---|---|---|
+| Git clone | URL unreachable / auth failed | ContextBuilder → ErrorHandler | Partial report, error logged to `errors[]` |
+| Judge LLM | Returns freeform text (not JSON) | Retry up to 3x, then skip | Error appended, criterion skipped in synthesis |
+| Security check | `os.system()` detected in repo | `has_security_violation = True` | ChiefJustice caps affected criteria at score 3 |
+| Score variance | Max − Min > 2 across judges | `dissent_summary` required | ChiefJustice generates explicit dissent explanation |
+
+---
+
+## 3. Implementation Status & Gap Analysis
+
+### 3.1 Current State (Interim — Wednesday)
+
+| Component | File | Status | Key Features |
+|---|---|---|---|
+| Typed State | `src/state.py` | ✅ Live | `Evidence`, `JudicialOpinion`, `CriterionResult`, `AuditReport`, `AgentState` with `operator.ior`/`operator.add` reducers |
+| Repo Tools | `src/tools/repo_tools.py` | ✅ Live | Sandboxed clone, git log forensics, 3 AST visitor classes (graph, state, security) |
+| Doc Tools | `src/tools/doc_tools.py` | ✅ Live | Docling PDF ingestion, RAG-lite chunked retrieval, hallucination path cross-reference |
+| Detective Nodes | `src/nodes/detectives.py` | ✅ Live | `RepoInvestigator`, `DocAnalyst`, `VisionInspector`, `EvidenceAggregator` |
+| Detective Graph | `src/graph.py` | ✅ Live | Parallel fan-out/fan-in `StateGraph`, rubric loading from `rubric.json`, CLI entry point |
+| Rubric Constitution | `rubric.json` | ✅ Live | 10 forensic dimensions with `success_pattern`, `failure_pattern`, `synthesis_rules` |
+| Judicial Layer | `src/nodes/judges.py` | ✅ Implemented · 🔄 Not Wired | `Prosecutor`, `Defense`, `TechLead` with distinct system prompts + `.with_structured_output()` |
+| Synthesis Engine | `src/nodes/justice.py` | ✅ Implemented · 🔄 Not Wired | `ChiefJustice` with 4 deterministic rules + Markdown serializer |
+
+### 3.2 Gap Analysis
+
+#### Technical Gaps
+
+| Gap ID | Description | Root Cause | Impact if Unresolved |
+|---|---|---|---|
+| T-01 | Judges not wired into `src/graph.py` | Deliberate — interim scope | Graph produces only evidence; no judicial verdict |
+| T-02 | `ChiefJustice` node not connected to `END` | Deliberate — follows T-01 | No final Markdown report generated |
+| T-03 | `VisionInspector` LLM call not mandatory | API key required at runtime | Diagram analysis skipped if key absent |
+| T-04 | No conditional edge for clone failure | Pending error-handling sprint | Graph may hang on invalid repo URL |
+
+#### Process Gaps
+
+| Gap ID | Description | Root Cause | Impact if Unresolved |
+|---|---|---|---|
+| P-01 | No self-audit run yet | Agent not yet end-to-end | Cannot demonstrate self-evaluation capability |
+| P-02 | No peer-audit run yet | Peer repo not yet assigned | Cannot deliver peer audit report |
+| P-03 | No LangSmith trace link | Tracing not tested end-to-end | Observability metric missing from submission |
+
+#### Resource Gaps
+
+| Gap ID | Description | Root Cause | Impact if Unresolved |
+|---|---|---|---|
+| R-01 | No video demo recorded | System not yet end-to-end | Final submission requirement unmet |
+| R-02 | `reports/interim_report.pdf` (this document) | Requires PDF conversion | Submission needs PDF format |
 
 ---
 
@@ -220,26 +351,47 @@ This allows updating the Constitution (e.g., adding new forensic protocols) with
 
 ---
 
-## 8. Remediation Plan for Known Gaps
+## 8. Remediation Plan & Risk Mitigation
 
-### Priority 1 — Wire Judicial Layer (Thursday)
-- Update `src/graph.py` to add `Prosecutor`, `Defense`, `TechLead` nodes
-- Add fan-out edges: `EvidenceAggregator → [Prosecutor, Defense, TechLead]`
-- Add fan-in edges: `[Prosecutor, Defense, TechLead] → ChiefJustice`
-- Add `ChiefJustice → END`
+### 8.1 Prioritized Action Plan
 
-### Priority 2 — Markdown Report Output (Friday)
-- Finalize `_serialize_to_markdown()` in `justice.py`
-- Add conditional edges for error handling (failed clone → skip to report with error)
-- Test end-to-end with a real repo URL
+| Priority | Gap IDs | Action | Owner | Deadline | Success Metric |
+|---|---|---|---|---|---|
+| 🔴 CRITICAL | T-01, T-02 | Wire judges + ChiefJustice into `graph.py` | Dev | Thursday 21:00 UTC | `graph.invoke()` produces `final_report` with all 10 criteria scored |
+| 🔴 CRITICAL | T-04 | Add conditional edges for clone failure | Dev | Thursday 21:00 UTC | Invalid URL input routes to ErrorHandler, not a Python exception |
+| 🟡 HIGH | T-03 | Make VisionInspector gracefully skip (already handled) | Dev | Friday 21:00 UTC | `vision` key present in `evidences` even if LLM call skipped |
+| 🟡 HIGH | P-03 | Set `LANGCHAIN_TRACING_V2=true`, run once, capture trace URL | Dev | Friday 21:00 UTC | LangSmith trace URL accessible and shows full graph execution |
+| 🟢 STANDARD | P-01 | Run self-audit: `python -m src.graph https://github.com/78gk/The-Automaton-Auditor` | Dev | Saturday 09:00 UTC | `audit/report_onself_generated/audit_report.md` exists with scores |
+| 🟢 STANDARD | P-02 | Run peer-audit against assigned repo URL | Dev | Saturday 15:00 UTC | `audit/report_onpeer_generated/audit_report.md` delivered |
+| 🟢 STANDARD | R-01 | Record 5-min demo: show graph execution, evidence summary, final report | Dev | Saturday 18:00 UTC | Video uploaded, link in README |
+| 🟢 STANDARD | R-02 | Convert this document to PDF | Dev | Wednesday 21:00 UTC | `reports/interim_report.pdf` committed to repo |
 
-### Priority 3 — Self & Peer Audit (Saturday)
-- Run agent against own repo: `python -m src.graph https://github.com/78gk/The-Automaton-Auditor`
-- Run agent against peer's repo
-- Record 5-minute video demo
-- Write final reflection on MinMax feedback loop
+### 8.2 Risk Mitigation Strategies
+
+| Risk | Probability | Impact | Mitigation |
+|---|---|---|---|
+| LLM API rate limits during judge fan-out (3 parallel LLM calls per criterion × 10 criteria = 30 calls) | Medium | High | Add exponential backoff in `get_judge_llm()`; use Gemini Flash as cheaper fallback model |
+| `docling` install fails in CI environment | Medium | Medium | `pypdf` fallback already implemented in `ingest_pdf()`; test confirms fallback path works |
+| Peer repo URL unavailable at audit time | Low | High | Cache clone in temp dir before deadline; run audit immediately when URL is shared |
+| VisionInspector multimodal call produces no useful output | Medium | Low | Evidence item set to `found=False` with rationale — ChiefJustice handles gracefully |
+| Score variance > 2 on every criterion (judges diverge wildly) | Low | Medium | `dissent_summary` auto-generated; TechLead 2x weight ensures convergence on architecture criteria |
+| Git history appears as "bulk upload" to our own auditor | Low | High | 8 commits with timestamps spread across the build session — progression story is genuine |
+
+### 8.3 Thursday Sprint Plan (Detailed)
+
+```
+08:00  Wire Prosecutor, Defense, TechLead nodes into graph.py
+       └─ add_node() for each + fan-out edges from EvidenceAggregator
+09:00  Wire ChiefJustice + add fan-in edges from all 3 judges
+       └─ add_edge(ChiefJustice, END)
+10:00  Add conditional edge: ContextBuilder --[invalid URL]--> ErrorHandler
+11:00  Test full graph.invoke() with a real repo URL (this repo)
+       └─ Verify evidences + opinions + final_report all populated
+13:00  Capture LangSmith trace URL
+14:00  Commit: "feat: wire complete judicial fan-out/fan-in and ChiefJustice to graph"
+15:00  Buffer / fix any issues found during testing
+```
 
 ---
 
-*Report generated: Wednesday, 2026-02-25*
-*Repository: https://github.com/78gk/The-Automaton-Auditor*
+*Report version: 0.1.0 (Interim) | Generated: 2026-02-25 | Repository: https://github.com/78gk/The-Automaton-Auditor*
