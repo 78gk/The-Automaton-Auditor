@@ -151,65 +151,11 @@ The auditor must extract structured insight from PDF architectural reports of va
 
 ### 2.1 Full System Flow Diagram
 
-> **Legend:** Parallel branches (fan-out) shown as simultaneous paths. Fan-in synchronization nodes shown with multiple incoming arrows. Guard conditions shown in square brackets. Completed nodes (✅) are live in the interim build; scheduled nodes (🔄) are implemented but not yet wired into the graph.
+> **Legend:** Parallel branches (fan-out) shown as simultaneous paths. Fan-in synchronization nodes shown with multiple incoming arrows. Guard conditions shown in square brackets. Live nodes are fully implemented and wired. Scheduled nodes are implemented but pending graph wiring (Thursday).
 
-```mermaid
-flowchart TD
-    START([🚀 START]) --> CB
+![DIAGRAM_PLACEHOLDER]
 
-    CB["**ContextBuilder** ✅\nLoads rubric.json Constitution\nInitializes AgentState"]
-
-    CB -->|Fan-Out| RI
-    CB -->|Fan-Out| DA
-    CB -->|Fan-Out| VI
-
-    RI["**RepoInvestigator** ✅\n─────────────────\nClones repo → tempfile sandbox\nGit log forensic analysis\nAST: graph topology\nAST: state model rigor\nAST: tool security scan\nOutput: evidences[repo]"]
-
-    DA["**DocAnalyst** ✅\n─────────────────\nDocling PDF ingestion\nRAG-lite chunk retrieval\nTheoretical depth scan\nFile path extraction\nOutput: evidences[doc]"]
-
-    VI["**VisionInspector** ✅\n─────────────────\nImage extraction from PDF\nMultimodal LLM diagram analysis\nParallel pattern detection\nOutput: evidences[vision]"]
-
-    RI -->|Fan-In| EA
-    DA -->|Fan-In| EA
-    VI -->|Fan-In| EA
-
-    EA["**EvidenceAggregator** ✅\n─────────────────\nCross-reference PDF paths vs repo\nHallucination rate computation\nEvidence summary logging\nState: evidences fully merged"]
-
-    EA -->|Fan-Out| PR
-    EA -->|Fan-Out| DE
-    EA -->|Fan-Out| TL
-
-    PR["**Prosecutor** 🔄\n─────────────────\nPersona: adversarial\nLLM.with_structured_output()\nFinds gaps & security flaws\nOutput: opinions += [JudicialOpinion]"]
-
-    DE["**Defense** 🔄\n─────────────────\nPersona: optimistic\nLLM.with_structured_output()\nRewards effort & intent\nOutput: opinions += [JudicialOpinion]"]
-
-    TL["**TechLead** 🔄\n─────────────────\nPersona: pragmatic\nLLM.with_structured_output()\nEvaluates maintainability\nOutput: opinions += [JudicialOpinion]"]
-
-    PR -->|Fan-In| CJ
-    DE -->|Fan-In| CJ
-    TL -->|Fan-In| CJ
-
-    CJ["**ChiefJustice** 🔄\n─────────────────\nRule of Security: cap at 3\nRule of Evidence: fact supremacy\nRule of Functionality: TechLead 2x\nVariance Rule: dissent if gap > 2\nOutput: AuditReport Markdown"]
-
-    CJ --> END([🏁 END])
-
-    EH["**ErrorHandler** 🔄\n[on clone failure]\nPartial report + error log"]
-    CB -->|Guard: invalid URL| EH
-    EH --> END
-
-    style START fill:#1a1a2e,color:#e0e0e0,stroke:#4a9eff
-    style END fill:#1a1a2e,color:#e0e0e0,stroke:#4a9eff
-    style CB fill:#16213e,color:#e0e0e0,stroke:#4a9eff
-    style RI fill:#0f3460,color:#e0e0e0,stroke:#4a9eff
-    style DA fill:#0f3460,color:#e0e0e0,stroke:#4a9eff
-    style VI fill:#0f3460,color:#e0e0e0,stroke:#4a9eff
-    style EA fill:#533483,color:#e0e0e0,stroke:#a855f7
-    style PR fill:#1a472a,color:#e0e0e0,stroke:#4ade80
-    style DE fill:#1a472a,color:#e0e0e0,stroke:#4ade80
-    style TL fill:#1a472a,color:#e0e0e0,stroke:#4ade80
-    style CJ fill:#7b2d00,color:#e0e0e0,stroke:#f97316
-    style EH fill:#3d0000,color:#e0e0e0,stroke:#ef4444
-```
+**Figure 1: Automaton Auditor — Full StateGraph Architecture.** Parallel fan-out/fan-in for Detective Layer (blue/purple) and Judicial Layer (green/orange). State reducers: `operator.ior` (dict merge) for `evidences`, `operator.add` (list extend) for `opinions`. Conditional `ErrorHandler` edge (red) handles invalid repo URLs gracefully.
 
 ### 2.2 Parallel Execution Patterns
 
