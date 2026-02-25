@@ -19,11 +19,45 @@ logger = logging.getLogger(__name__)
 # Git Operations (Sandboxed)
 # ---------------------------------------------------------------------------
 
+def validate_repo_url(repo_url: str) -> Tuple[bool, str]:
+    """
+    Validate a repository URL before cloning.
+    Prevents shell injection and ensures the URL is a safe git remote.
+    Returns (is_valid: bool, error_message: str).
+    """
+    import re
+    if not repo_url or not isinstance(repo_url, str):
+        return False, "Repository URL must be a non-empty string."
+    # Allow only https:// and git:// and ssh git@ URLs
+    allowed_pattern = re.compile(
+        r'^(https://|git://|git@|ssh://)'
+        r'[\w\-\.@:/]+\.git(/)?$|'
+        r'^https://github\.com/[\w\-\.]+/[\w\-\.]+(/)?$'
+    )
+    if not allowed_pattern.match(repo_url.strip()):
+        return False, (
+            f"Repository URL '{repo_url}' does not match an allowed pattern. "
+            "Use https://github.com/owner/repo or a valid git remote URL."
+        )
+    # Block path traversal and shell injection characters
+    dangerous_chars = [";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r"]
+    for char in dangerous_chars:
+        if char in repo_url:
+            return False, f"Repository URL contains forbidden character: '{char}'"
+    return True, "URL is valid."
+
+
 def clone_repo(repo_url: str, target_dir: str) -> Tuple[bool, str]:
     """
     Clone a GitHub repository into target_dir using subprocess (NOT os.system).
+    Validates URL before cloning to prevent shell injection.
     Returns (success: bool, message: str).
     """
+    # Validate URL first
+    is_valid, validation_msg = validate_repo_url(repo_url)
+    if not is_valid:
+        return False, f"URL validation failed: {validation_msg}"
+
     try:
         result = subprocess.run(
             ["git", "clone", "--depth", "50", repo_url, target_dir],

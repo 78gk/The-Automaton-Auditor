@@ -27,6 +27,7 @@ from src.nodes.detectives import (
     repo_investigator_node,
     vision_inspector_node,
 )
+from src.tools.repo_tools import validate_repo_url
 
 # Load environment variables from .env
 load_dotenv()
@@ -60,17 +61,25 @@ def load_rubric(rubric_path: str = "rubric.json") -> list:
 def context_builder_node(state: AgentState) -> Dict[str, Any]:
     """
     Initializes the audit by loading the rubric and setting up initial state.
+    Validates the repo URL before fan-out to detectives.
     This is the START node that prepares context before fan-out to detectives.
     """
     rubric_dims = load_rubric()
+    repo_url = state["repo_url"]
+
+    # Validate URL upfront — sets error flag if invalid
+    is_valid, validation_msg = validate_repo_url(repo_url)
+    errors = [] if is_valid else [f"Invalid repository URL: {validation_msg}"]
+
     logger.info(
         f"[ContextBuilder] Loaded {len(rubric_dims)} rubric dimensions. "
-        f"Target repo: {state['repo_url']}"
+        f"Target repo: {repo_url} | URL valid: {is_valid}"
     )
     print(f"\n{'='*60}")
     print(f"AUTOMATON AUDITOR — Digital Courtroom")
     print(f"{'='*60}")
-    print(f"  Target Repo: {state['repo_url']}")
+    print(f"  Target Repo: {repo_url}")
+    print(f"  URL Valid:   {'✓' if is_valid else '✗ ' + validation_msg}")
     print(f"  PDF Report:  {state.get('pdf_path', 'N/A')}")
     print(f"  Rubric Dims: {len(rubric_dims)}")
     print(f"{'='*60}\n")
@@ -79,9 +88,42 @@ def context_builder_node(state: AgentState) -> Dict[str, Any]:
         "rubric_dimensions": rubric_dims,
         "evidences": {},
         "opinions": [],
-        "errors": [],
+        "errors": errors,
         "final_report": None,
     }
+
+
+def error_handler_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Handles unrecoverable errors (e.g., invalid repo URL, network failure).
+    Produces a partial report with error information instead of crashing.
+    """
+    errors = state.get("errors", [])
+    repo_url = state.get("repo_url", "unknown")
+    logger.error(f"[ErrorHandler] Routing to error handler. Errors: {errors}")
+
+    print(f"\n{'='*60}")
+    print(f"ERROR HANDLER — Partial Report")
+    print(f"{'='*60}")
+    for err in errors:
+        print(f"  ✗ {err}")
+    print(f"{'='*60}\n")
+
+    return {
+        "errors": [f"Audit terminated early. Repo: {repo_url}. Errors: {'; '.join(errors)}"],
+    }
+
+
+def route_after_context(state: AgentState) -> str:
+    """
+    Conditional routing after ContextBuilder.
+    If URL is invalid → ErrorHandler.
+    Otherwise → fan-out to all 3 detectives (LangGraph handles parallel edges).
+    """
+    errors = state.get("errors", [])
+    if errors:
+        return "error"
+    return "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -96,8 +138,8 @@ def build_graph() -> Any:
         START
           │
           ▼
-    ContextBuilder
-          │
+    ContextBuilder ──[invalid URL]──► ErrorHandler ──► END
+          │ [valid URL]
     ┌─────┼─────────────┐
     ▼     ▼             ▼
     Repo  Doc       Vision
@@ -112,6 +154,7 @@ def build_graph() -> Any:
 
     # --- Add Nodes ---
     builder.add_node("ContextBuilder", context_builder_node)
+    builder.add_node("ErrorHandler", error_handler_node)
     builder.add_node("RepoInvestigator", repo_investigator_node)
     builder.add_node("DocAnalyst", doc_analyst_node)
     builder.add_node("VisionInspector", vision_inspector_node)
@@ -121,10 +164,22 @@ def build_graph() -> Any:
     # START → ContextBuilder
     builder.add_edge(START, "ContextBuilder")
 
-    # ContextBuilder → [Fan-Out to all 3 Detectives in parallel]
-    builder.add_edge("ContextBuilder", "RepoInvestigator")
+    # ContextBuilder → conditional: invalid URL → ErrorHandler, valid → Fan-Out
+    builder.add_conditional_edges(
+        "ContextBuilder",
+        route_after_context,
+        {
+            "error": "ErrorHandler",
+            "ok": "RepoInvestigator",   # LangGraph fan-out: first parallel branch
+        },
+    )
+    # Additional fan-out edges from ContextBuilder for parallel detectives
+    # (LangGraph executes multiple add_edge targets from a conditional node in parallel)
     builder.add_edge("ContextBuilder", "DocAnalyst")
     builder.add_edge("ContextBuilder", "VisionInspector")
+
+    # ErrorHandler → END (graceful failure)
+    builder.add_edge("ErrorHandler", END)
 
     # All 3 Detectives → EvidenceAggregator [Fan-In]
     builder.add_edge("RepoInvestigator", "EvidenceAggregator")

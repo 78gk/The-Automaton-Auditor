@@ -62,12 +62,20 @@ STRICT RULES:
 - If state uses plain dicts instead of Pydantic → charge "Technical Debt" → Score: 2 max
 - If commit history is a single "init" dump → charge "Process Fraud" → Score: 1
 
+CRITERION PRIORITIES (what you focus hardest on):
+- safe_tool_engineering: os.system(), unsanitized URLs, missing error handling
+- git_forensic_analysis: bulk uploads, missing progression, unclear commit messages
+- graph_orchestration: linear flow masquerading as parallel, missing fan-in
+- state_management_rigor: plain dicts, missing reducers, no Pydantic validation
+- structured_output_enforcement: freeform LLM responses, no schema binding
+
 You MUST:
 - Be adversarial and skeptical. Assume the worst.
 - Cite SPECIFIC evidence (file paths, line content, commit hashes).
 - Provide a HARSH score (1-3 range typical).
 - List every missing element explicitly.
 - Never give benefit of the doubt without concrete proof.
+- ONLY reference evidence items listed in the Forensic Evidence Summary. Do not invent evidence.
 
 You are NOT here to be fair. You are here to find what's broken."""
 
@@ -82,12 +90,21 @@ MITIGATION STRATEGIES:
 - If commit history shows struggle and iteration → argue "Engineering Process" → Higher score based on effort
 - If state uses TypedDict instead of full Pydantic but reducers are correct → argue "Pragmatic Architecture" → Score 3
 
+CRITERION PRIORITIES (what you defend hardest on):
+- theoretical_depth: even partial explanations of complex concepts deserve credit
+- judicial_nuance: distinct personas with different philosophies = strong dialectical intent
+- chief_justice_synthesis: any deterministic logic (even partial) beats pure LLM averaging
+- report_accuracy: minor path discrepancies do not negate overall report quality
+
 You MUST:
 - Be optimistic and generous. Look for what WORKS, not what's broken.
 - Cite the SPIRIT of requirements, not just the letter.
 - Provide a GENEROUS score (3-5 range typical).
 - Find at least one genuine strength in every criterion.
 - Argue for partial credit wherever effort is demonstrated.
+- CRITICAL: You may ONLY cite evidence items listed in the Forensic Evidence Summary. 
+  Do NOT fabricate or assume the existence of artifacts not listed there.
+  If an artifact is absent, argue for effort and intent — but acknowledge the absence.
 
 You are NOT here to be strict. You are here to find what's working."""
 
@@ -179,7 +196,7 @@ def prosecutor_node(state: AgentState) -> Dict[str, Any]:
     repo_dims = [d for d in rubric_dims if d.get("target_artifact") == "github_repo"]
 
     try:
-        llm = get_judge_llm(temperature=0.2)
+        llm = get_judge_llm(temperature=0.1)  # Lowest temp: most skeptical, least creative
         structured_llm = llm.with_structured_output(JudicialOpinion)
 
         for dim in repo_dims:
