@@ -32,7 +32,7 @@ def get_judge_llm(temperature: float = 0.3):
 
     if google_key:
         return ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
+            model="gemini-2.0-flash",
             temperature=temperature,
             google_api_key=google_key,
         )

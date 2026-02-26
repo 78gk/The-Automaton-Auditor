@@ -49,7 +49,7 @@ def get_llm(temperature: float = 0.0):
 
     if google_key:
         return ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
+            model="gemini-2.0-flash",
             temperature=temperature,
             google_api_key=google_key,
         )
@@ -310,7 +310,7 @@ def doc_analyst_node(state: AgentState) -> Dict[str, Any]:
             f"Found {all_found}/4 key concepts. "
             f"Substantive explanations: {all_substantive}/4. "
             f"Keyword drops (buzzwords only): {all_found - all_substantive}. "
-            f"Details: {', '.join(f'{k}={v[\"depth\"]}' for k, v in depth_data.items() if v.get('found'))}"
+            "Details: " + ", ".join(f"{k}={v['depth']}" for k, v in depth_data.items() if v.get("found"))
         ),
         confidence=0.85 if all_substantive >= 2 else 0.7,
     ))

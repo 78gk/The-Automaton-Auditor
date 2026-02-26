@@ -3,22 +3,18 @@ Automaton Auditor — LangGraph StateGraph Definition
 Implements the full Digital Courtroom architecture with:
 - Fan-Out: Detectives run in parallel (RepoInvestigator, DocAnalyst, VisionInspector)
 - Fan-In: EvidenceAggregator synchronizes before Judicial layer
-- Fan-Out: Judges run in parallel (Prosecutor, Defense, TechLead) [Phase 2]
-- Fan-In: ChiefJustice synthesizes final verdict [Phase 2]
-
-INTERIM VERSION: Detective layer + EvidenceAggregator fully wired.
-Judicial layer stubs present but not yet invoked.
+- Fan-Out: Judges run in parallel (Prosecutor, Defense, TechLead)
+- Fan-In: ChiefJustice synthesizes final verdict and serializes Markdown report
 """
 
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from dotenv import load_dotenv
 from langgraph.graph import END, START, StateGraph
-from langgraph.constants import Send
 
 from src.state import AgentState
 from src.nodes.detectives import (
@@ -27,6 +23,12 @@ from src.nodes.detectives import (
     repo_investigator_node,
     vision_inspector_node,
 )
+from src.nodes.judges import (
+    prosecutor_node,
+    defense_node,
+    tech_lead_node,
+)
+from src.nodes.justice import chief_justice_node
 from src.tools.repo_tools import validate_repo_url
 
 # Load environment variables from .env
@@ -114,16 +116,19 @@ def error_handler_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def route_after_context(state: AgentState) -> str:
+def route_after_context(state: AgentState) -> List[str]:
     """
     Conditional routing after ContextBuilder.
-    If URL is invalid → ErrorHandler.
-    Otherwise → fan-out to all 3 detectives (LangGraph handles parallel edges).
+    If URL is invalid → ErrorHandler (single node).
+    Otherwise → fan-out to all 3 detectives in parallel.
+
+    Returns a list of node names for LangGraph to execute in parallel.
     """
     errors = state.get("errors", [])
     if errors:
-        return "error"
-    return "ok"
+        return ["ErrorHandler"]
+    # Parallel fan-out: LangGraph executes all three simultaneously
+    return ["RepoInvestigator", "DocAnalyst", "VisionInspector"]
 
 
 # ---------------------------------------------------------------------------
@@ -132,23 +137,31 @@ def route_after_context(state: AgentState) -> str:
 
 def build_graph() -> Any:
     """
-    Build and compile the Automaton Auditor StateGraph.
+    Build and compile the full Automaton Auditor StateGraph.
 
     Architecture:
         START
           │
           ▼
     ContextBuilder ──[invalid URL]──► ErrorHandler ──► END
-          │ [valid URL]
-    ┌─────┼─────────────┐
-    ▼     ▼             ▼
-    Repo  Doc       Vision
-    Inv.  Analyst   Inspector
-    └─────┼─────────────┘
-          ▼
+          │ [valid URL — parallel fan-out]
+    ┌─────┼──────────────┐
+    ▼     ▼              ▼
+    Repo  Doc        Vision
+    Inv.  Analyst    Inspector
+    └─────┼──────────────┘
+          ▼ [fan-in]
     EvidenceAggregator
+          │ [parallel fan-out]
+    ┌─────┼──────────────┐
+    ▼     ▼              ▼
+    Pros- Defense    TechLead
+    ecutor
+    └─────┼──────────────┘
+          ▼ [fan-in]
+    ChiefJustice
           │
-         END   (interim — judges added in Phase 2)
+         END
     """
     builder = StateGraph(AgentState)
 
@@ -159,24 +172,23 @@ def build_graph() -> Any:
     builder.add_node("DocAnalyst", doc_analyst_node)
     builder.add_node("VisionInspector", vision_inspector_node)
     builder.add_node("EvidenceAggregator", evidence_aggregator_node)
+    builder.add_node("Prosecutor", prosecutor_node)
+    builder.add_node("Defense", defense_node)
+    builder.add_node("TechLead", tech_lead_node)
+    builder.add_node("ChiefJustice", chief_justice_node)
 
     # --- Wire Edges ---
+
     # START → ContextBuilder
     builder.add_edge(START, "ContextBuilder")
 
-    # ContextBuilder → conditional: invalid URL → ErrorHandler, valid → Fan-Out
+    # ContextBuilder → conditional fan-out:
+    #   invalid URL → [ErrorHandler]
+    #   valid URL   → [RepoInvestigator, DocAnalyst, VisionInspector] (parallel)
     builder.add_conditional_edges(
         "ContextBuilder",
         route_after_context,
-        {
-            "error": "ErrorHandler",
-            "ok": "RepoInvestigator",   # LangGraph fan-out: first parallel branch
-        },
     )
-    # Additional fan-out edges from ContextBuilder for parallel detectives
-    # (LangGraph executes multiple add_edge targets from a conditional node in parallel)
-    builder.add_edge("ContextBuilder", "DocAnalyst")
-    builder.add_edge("ContextBuilder", "VisionInspector")
 
     # ErrorHandler → END (graceful failure)
     builder.add_edge("ErrorHandler", END)
@@ -186,12 +198,22 @@ def build_graph() -> Any:
     builder.add_edge("DocAnalyst", "EvidenceAggregator")
     builder.add_edge("VisionInspector", "EvidenceAggregator")
 
-    # EvidenceAggregator → END (interim submission)
-    builder.add_edge("EvidenceAggregator", END)
+    # EvidenceAggregator → Judges [Fan-Out — parallel]
+    builder.add_edge("EvidenceAggregator", "Prosecutor")
+    builder.add_edge("EvidenceAggregator", "Defense")
+    builder.add_edge("EvidenceAggregator", "TechLead")
+
+    # All 3 Judges → ChiefJustice [Fan-In]
+    builder.add_edge("Prosecutor", "ChiefJustice")
+    builder.add_edge("Defense", "ChiefJustice")
+    builder.add_edge("TechLead", "ChiefJustice")
+
+    # ChiefJustice → END
+    builder.add_edge("ChiefJustice", END)
 
     # Compile the graph
     graph = builder.compile()
-    logger.info("[GraphBuilder] Graph compiled successfully.")
+    logger.info("[GraphBuilder] Full Digital Courtroom graph compiled successfully.")
     return graph
 
 
@@ -199,16 +221,17 @@ def build_graph() -> Any:
 # Main Entry Point
 # ---------------------------------------------------------------------------
 
-def run_detective_audit(repo_url: str, pdf_path: str = "") -> Dict[str, Any]:
+def run_audit(repo_url: str, pdf_path: str = "", output_dir: str = "audit") -> Dict[str, Any]:
     """
-    Run the Automaton Auditor detective graph against a target repo.
+    Run the full Automaton Auditor swarm against a target repo and PDF report.
 
     Args:
-        repo_url: GitHub repository URL to audit
-        pdf_path: Optional path to PDF architectural report
+        repo_url:   GitHub repository URL to audit
+        pdf_path:   Path to the PDF architectural report (optional but recommended)
+        output_dir: Directory where the Markdown audit report will be written
 
     Returns:
-        Final AgentState with all collected evidence
+        Final AgentState with all evidence, opinions, and the final AuditReport
     """
     graph = build_graph()
 
@@ -222,10 +245,14 @@ def run_detective_audit(repo_url: str, pdf_path: str = "") -> Dict[str, Any]:
         "final_report": None,
     }
 
-    logger.info(f"Starting audit of: {repo_url}")
+    logger.info(f"[Audit] Starting full Digital Courtroom audit of: {repo_url}")
     result = graph.invoke(initial_state)
-    logger.info("Audit complete.")
+    logger.info("[Audit] Complete.")
     return result
+
+
+# Backwards-compatible alias
+run_detective_audit = run_audit
 
 
 # ---------------------------------------------------------------------------
@@ -234,21 +261,21 @@ def run_detective_audit(repo_url: str, pdf_path: str = "") -> Dict[str, Any]:
 
 if __name__ == "__main__":
     import sys
-    import json
 
     if len(sys.argv) < 2:
-        print("Usage: python -m src.graph <repo_url> [pdf_path]")
-        print("Example: python -m src.graph https://github.com/user/repo reports/interim_report.pdf")
+        print("Usage: python -m src.graph <repo_url> [pdf_path] [output_dir]")
+        print("Example: python -m src.graph https://github.com/user/repo reports/interim_report.pdf audit/")
         sys.exit(1)
 
     repo_url = sys.argv[1]
     pdf_path = sys.argv[2] if len(sys.argv) > 2 else ""
+    output_dir = sys.argv[3] if len(sys.argv) > 3 else "audit"
 
-    result = run_detective_audit(repo_url, pdf_path)
+    result = run_audit(repo_url, pdf_path, output_dir)
 
     # Print evidence summary
     print("\n" + "="*60)
-    print("FINAL EVIDENCE SUMMARY")
+    print("EVIDENCE SUMMARY")
     print("="*60)
     evidences = result.get("evidences", {})
     for detective, evs in evidences.items():
@@ -257,7 +284,31 @@ if __name__ == "__main__":
             status = "✓ FOUND" if ev.found else "✗ NOT FOUND"
             print(f"  {status} | {ev.goal} | confidence={ev.confidence:.2f}")
             print(f"    Location: {ev.location}")
-            print(f"    Rationale: {ev.rationale[:150]}...")
+            if ev.rationale:
+                print(f"    Rationale: {ev.rationale[:150]}...")
+
+    # Print opinions summary
+    opinions = result.get("opinions", [])
+    if opinions:
+        print(f"\n{'='*60}")
+        print(f"JUDICIAL OPINIONS — {len(opinions)} total")
+        print("="*60)
+        by_criterion: Dict[str, Any] = {}
+        for op in opinions:
+            by_criterion.setdefault(op.criterion_id, []).append(op)
+        for crit_id, ops in by_criterion.items():
+            scores = {op.judge: op.score for op in ops}
+            print(f"  {crit_id}: {scores}")
+
+    # Print final report summary
+    final_report = result.get("final_report")
+    if final_report:
+        print(f"\n{'='*60}")
+        print(f"FINAL VERDICT")
+        print("="*60)
+        print(f"  Overall Score: {final_report.overall_score:.1f} / 5.0")
+        print(f"  Executive Summary:\n{final_report.executive_summary}")
+        print(f"\n  Audit report written to: audit/audit_report.md")
 
     errors = result.get("errors", [])
     if errors:
