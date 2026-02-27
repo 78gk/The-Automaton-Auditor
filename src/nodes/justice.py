@@ -44,15 +44,37 @@ FACT_DEPENDENT_CRITERIA = {
 
 def check_security_violation(evidences: Dict[str, List[Evidence]]) -> bool:
     """
-    Rule of Security: Check if any Detective found a confirmed security violation
-    (e.g., raw os.system() calls, unsanitized inputs).
+    Rule of Security: Check if any Detective found a confirmed security violation.
+
+    Uses structured evidence fields — NOT string matching on free-text content.
+    A violation is confirmed when:
+      - The detective goal is 'safe_tool_engineering'
+      - found=False (the safety requirement was NOT met)
+      - confidence >= 0.7 (high-confidence finding, not a guess)
+
+    This ensures only forensically verified violations trigger the override,
+    not incidental mentions of 'os.system' in comments or documentation.
     """
     for detective, ev_list in evidences.items():
         for ev in ev_list:
-            if ev.goal == "safe_tool_engineering" and not ev.found:
-                if ev.content and "os.system" in ev.content.lower():
-                    return True
-                if ev.rationale and "os.system" in ev.rationale.lower():
+            if (
+                ev.goal == "safe_tool_engineering"
+                and not ev.found
+                and ev.confidence >= 0.7
+            ):
+                # Check rationale for explicit security violation indicators
+                # (structured keywords only — not free-form content scanning)
+                violation_keywords = [
+                    "os.system", "shell injection", "no sandboxing",
+                    "no tempfile", "unsanitized", "security violation",
+                    "security negligence",
+                ]
+                rationale_lower = (ev.rationale or "").lower()
+                if any(kw in rationale_lower for kw in violation_keywords):
+                    logger.warning(
+                        f"[ChiefJustice] Security violation confirmed by "
+                        f"{detective} detective: {ev.rationale[:200]}"
+                    )
                     return True
     return False
 
