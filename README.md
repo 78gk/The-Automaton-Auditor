@@ -4,35 +4,71 @@ A **hierarchical multi-agent LangGraph swarm** that performs forensic quality as
 
 ## Architecture
 
+The Digital Courtroom implements **two distinct parallel fan-out/fan-in patterns** — one for detectives and one for judges — connected by a synchronisation node:
+
 ```
 START
   │
   ▼
-ContextBuilder (loads rubric)
-  │
-  ├──────────────────────────────┐──────────────────────────────┐
-  ▼                              ▼                              ▼
-RepoInvestigator           DocAnalyst                  VisionInspector
-(AST + Git forensics)    (PDF ingestion + RAG)       (Diagram analysis)
-  │                              │                              │
-  └──────────────────────────────┴──────────────────────────────┘
-                                 │
-                                 ▼
-                        EvidenceAggregator (Fan-In)
-                                 │
-              ┌──────────────────┼──────────────────┐
-              ▼                  ▼                  ▼
-          Prosecutor          Defense            TechLead
-         (adversarial)       (forgiving)        (pragmatic)
-              │                  │                  │
-              └──────────────────┴──────────────────┘
-                                 │
-                                 ▼
-                           ChiefJustice
-                    (deterministic synthesis)
-                                 │
-                                 ▼
-                        Markdown Audit Report
+ContextBuilder  ──[invalid URL]──►  ErrorHandler  ──► END
+  │ [valid]
+  │   ◄─── FAN-OUT 1: Detectives run in parallel ───►
+  ├───────────────────┬───────────────────┐
+  ▼                   ▼                   ▼
+RepoInvestigator   DocAnalyst       VisionInspector
+(AST + Git)      (PDF + RAG)       (Diagram Vision)
+  │                   │                   │
+  └───────────────────┴───────────────────┘
+                       │   ◄─── FAN-IN 1 ───►
+                       ▼
+              EvidenceAggregator
+              (cross-reference + hallucination check)
+                       │
+                       │   ◄─── FAN-OUT 2: Judges run in parallel ───►
+                       ├───────────────────┬───────────────────┐
+                       ▼                   ▼                   ▼
+                  Prosecutor           Defense             TechLead
+                 (adversarial)        (forgiving)         (pragmatic)
+                 score + args        score + args        score + args
+                       │                   │                   │
+                       └───────────────────┴───────────────────┘
+                                           │   ◄─── FAN-IN 2 ───►
+                                           ▼
+                                     ChiefJustice
+                              (deterministic synthesis)
+                              Security Override · Fact Supremacy
+                              TechLead Weight · Variance Rule
+                                           │
+                                           ▼
+                                  Markdown Audit Report
+                                    (audit/audit_report.md)
+```
+
+![StateGraph Architecture](reports/stategraph_architecture.png)
+
+### Graph wiring (from `src/graph.py`)
+
+```python
+# Fan-Out 1: Detectives in parallel
+builder.add_conditional_edges("ContextBuilder", route_after_context)
+# route_after_context() returns ["RepoInvestigator", "DocAnalyst", "VisionInspector"]
+
+# Fan-In 1: All detectives → EvidenceAggregator
+builder.add_edge("RepoInvestigator", "EvidenceAggregator")
+builder.add_edge("DocAnalyst", "EvidenceAggregator")
+builder.add_edge("VisionInspector", "EvidenceAggregator")
+
+# Fan-Out 2: Judges in parallel
+builder.add_edge("EvidenceAggregator", "Prosecutor")
+builder.add_edge("EvidenceAggregator", "Defense")
+builder.add_edge("EvidenceAggregator", "TechLead")
+
+# Fan-In 2: All judges → ChiefJustice
+builder.add_edge("Prosecutor", "ChiefJustice")
+builder.add_edge("Defense", "ChiefJustice")
+builder.add_edge("TechLead", "ChiefJustice")
+
+builder.add_edge("ChiefJustice", END)
 ```
 
 ## Setup
@@ -76,30 +112,40 @@ Required keys (at least one LLM key):
 
 ## Usage
 
-### Run the Detective Audit (Interim — Evidence Collection)
+### Run the Full Audit (Detectives + Judges + ChiefJustice)
 
 ```bash
-# Against any public GitHub repo
-python -m src.graph https://github.com/owner/repo-name
-
-# With a PDF report
+# Against any public GitHub repo (with PDF report)
 python -m src.graph https://github.com/owner/repo-name path/to/report.pdf
+
+# Output goes to audit/audit_report.md by default
+# Specify a custom output directory:
+python -m src.graph https://github.com/owner/repo-name path/to/report.pdf audit/report_onpeer_generated
 ```
 
 ### Run as a module
 
 ```python
-from src.graph import run_detective_audit
+from src.graph import run_audit
 
-result = run_detective_audit(
+result = run_audit(
     repo_url="https://github.com/owner/repo",
-    pdf_path="reports/interim_report.pdf"
+    pdf_path="reports/interim_report.pdf",
+    output_dir="audit/report_onself_generated"
 )
 
 # Access evidence
 for detective, evidences in result["evidences"].items():
     for ev in evidences:
         print(f"[{detective}] {ev.goal}: found={ev.found}, confidence={ev.confidence}")
+
+# Access judicial opinions
+for opinion in result["opinions"]:
+    print(f"[{opinion.judge}] {opinion.criterion_id}: {opinion.score}/5")
+
+# Access final report
+report = result["final_report"]
+print(f"Overall Score: {report.overall_score}/5")
 ```
 
 ## Project Structure
@@ -118,8 +164,12 @@ automaton-auditor/
 │       ├── repo_tools.py     # Git clone (sandboxed), AST parser
 │       └── doc_tools.py      # PDF ingestion (docling), cross-reference
 ├── reports/
-│   └── interim_report.pdf    # Interim architectural report
-├── audit/                    # Generated audit reports
+│   ├── interim_report.pdf         # Interim architectural report
+│   └── stategraph_architecture.png  # StateGraph architecture diagram
+├── audit/
+│   ├── report_onself_generated/   # Self-audit report (agent on own repo)
+│   ├── report_onpeer_generated/   # Peer-audit report (agent on peer's repo)
+│   └── report_bypeer_received/    # Peer's report on your repo
 ├── rubric.json               # Machine-readable rubric (the Constitution)
 ├── pyproject.toml            # uv-managed dependencies
 ├── .env.example              # Environment variable template
@@ -162,6 +212,6 @@ The `rubric.json` file is the agent's **Constitution** — 10 forensic dimension
 | Infrastructure (state, tools) | ✅ Complete |
 | Detective Layer (RepoInvestigator, DocAnalyst, VisionInspector) | ✅ Complete |
 | EvidenceAggregator (Fan-In) | ✅ Complete |
-| Judicial Layer (Prosecutor, Defense, TechLead) | 🔄 Thursday |
-| Chief Justice Synthesis | 🔄 Friday |
-| Full End-to-End Report | 🔄 Saturday |
+| Judicial Layer (Prosecutor, Defense, TechLead) | ✅ Complete — wired with `.with_structured_output(JudicialOpinion)` |
+| Chief Justice Synthesis | ✅ Complete — deterministic rules (Security Override, Fact Supremacy, Variance Rule) |
+| Full End-to-End Report | ✅ Complete — Markdown serialization to `audit/audit_report.md` |
