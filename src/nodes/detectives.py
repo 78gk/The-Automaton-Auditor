@@ -174,39 +174,73 @@ def repo_investigator_node(state: AgentState) -> Dict[str, Any]:
         else:
             graph_content = None
 
+        # Detect dual fan-out layers (detectives AND judges)
+        nodes_found = graph_data.get("nodes", [])
+        detective_nodes = [n for n in nodes_found if n in ("RepoInvestigator", "DocAnalyst", "VisionInspector")]
+        judge_nodes = [n for n in nodes_found if n in ("Prosecutor", "Defense", "TechLead")]
+        has_chief_justice = "ChiefJustice" in nodes_found
+        has_aggregator = "EvidenceAggregator" in nodes_found
+        has_dual_fanout = len(detective_nodes) >= 2 and len(judge_nodes) >= 2
+        fan_out_nodes = graph_data.get("fan_out_nodes", {})
+        fan_in_nodes = graph_data.get("fan_in_nodes", {})
+
         evidence_list.append(Evidence(
             goal="graph_orchestration",
-            found=graph_data.get("has_state_graph", False),
+            found=graph_data.get("has_state_graph", False) and graph_data.get("has_parallel_execution", False),
             content=graph_content[:2000] if graph_content else json.dumps(graph_data, indent=2),
             location="src/graph.py",
             rationale=(
-                f"StateGraph found: {graph_data.get('has_state_graph', False)}. "
-                f"Parallel execution: {graph_data.get('has_parallel_execution', False)}. "
-                f"Fan-out nodes: {list(graph_data.get('fan_out_nodes', {}).keys())}. "
-                f"Fan-in nodes: {list(graph_data.get('fan_in_nodes', {}).keys())}. "
-                f"Conditional edges: {len(graph_data.get('add_conditional_edge_calls', []))}. "
+                f"StateGraph instantiated: {graph_data.get('has_state_graph', False)}. "
+                f"FAN-OUT 1 (Detective layer): {detective_nodes} — "
+                f"{'CONFIRMED parallel' if len(detective_nodes) >= 2 else 'NOT parallel'}. "
+                f"FAN-IN 1 (EvidenceAggregator): {'CONFIRMED' if has_aggregator else 'NOT FOUND'}. "
+                f"FAN-OUT 2 (Judicial layer): {judge_nodes} — "
+                f"{'CONFIRMED parallel' if len(judge_nodes) >= 2 else 'NOT parallel'}. "
+                f"FAN-IN 2 (ChiefJustice): {'CONFIRMED' if has_chief_justice else 'NOT FOUND'}. "
+                f"Dual fan-out/fan-in architecture: {'CONFIRMED' if has_dual_fanout else 'NOT CONFIRMED'}. "
+                f"Conditional error edges: {len(graph_data.get('add_conditional_edge_calls', []))}. "
+                f"Fan-out nodes: {list(fan_out_nodes.keys())}. "
+                f"Fan-in nodes: {list(fan_in_nodes.keys())}. "
                 f"Is linear: {graph_data.get('is_linear', True)}."
             ),
             confidence=(
-                0.9 if graph_data.get("has_parallel_execution") else
+                0.97 if has_dual_fanout and has_aggregator and has_chief_justice else
+                0.7 if graph_data.get("has_parallel_execution") else
                 0.5 if graph_data.get("has_state_graph") else 0.1
             ),
         ))
 
         # --- 5. Safe Tool Engineering ---
         tool_safety = analyze_tool_safety(clone_target)
+        is_safe = (
+            tool_safety.get("uses_tempfile", False)
+            and tool_safety.get("uses_subprocess_run", False)
+            and not tool_safety.get("uses_os_system", False)
+            and tool_safety.get("has_error_handling", False)
+        )
+        strengths = tool_safety.get("security_strengths", [])
+        violations = tool_safety.get("security_violations", [])
         evidence_list.append(Evidence(
             goal="safe_tool_engineering",
-            found=tool_safety.get("uses_tempfile", False) and not tool_safety.get("uses_os_system", False),
+            found=is_safe,
             content=json.dumps(tool_safety, indent=2),
             location="src/tools/",
             rationale=(
-                f"Uses tempfile: {tool_safety.get('uses_tempfile', False)}. "
-                f"Uses subprocess.run: {tool_safety.get('uses_subprocess_run', False)}. "
-                f"OS.system violations: {tool_safety.get('uses_os_system', False)}. "
-                f"Violations: {tool_safety.get('security_violations', [])}."
+                f"Sandboxing (tempfile.TemporaryDirectory): "
+                f"{'CONFIRMED' if tool_safety.get('uses_tempfile') else 'NOT FOUND'}. "
+                f"Subprocess isolation (subprocess.run, NOT os.system): "
+                f"{'CONFIRMED' if tool_safety.get('uses_subprocess_run') else 'NOT FOUND'}. "
+                f"Raw os.system() calls: "
+                f"{'NONE — SAFE' if not tool_safety.get('uses_os_system') else 'DETECTED — VIOLATION'}. "
+                f"Try/except error handling: "
+                f"{'CONFIRMED' if tool_safety.get('has_error_handling') else 'NOT FOUND'}. "
+                f"Security strengths: {strengths}. "
+                f"Security violations: {violations if violations else 'NONE'}."
             ),
-            confidence=0.95 if tool_safety.get("uses_tempfile") else 0.3,
+            confidence=(
+                0.97 if is_safe else
+                0.6 if tool_safety.get("uses_tempfile") else 0.3
+            ),
         ))
 
         # --- 6. Structured Output Enforcement (Judge nodes) ---
