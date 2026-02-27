@@ -52,9 +52,9 @@ tmp_*
 *.tmp
 /tmp/
 
-# Audit outputs (generated — not committed unless final)
-audit/report_onself_generated/
-audit/report_onpeer_generated/
+# Audit outputs — committed as final deliverables
+# audit/report_onself_generated/  # unignored — commit final self-audit
+# audit/report_onpeer_generated/  # unignored — commit final peer-audit
 
 # Pytest
 .pytest_cache/

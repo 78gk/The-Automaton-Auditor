@@ -1,6 +1,6 @@
 # 🏛️ Automaton Auditor — Audit Report
-**Repository:** https://github.com/78gk/The-Automaton-Auditor
-**PDF Report:** reports/interim_report.pdf
+**Repository:** https://github.com/tedoaba/Digital-Courtroom
+**PDF Report:** 
 **Overall Score:** 1.0 / 5.0
 
 ---
