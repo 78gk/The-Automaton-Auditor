@@ -17,6 +17,7 @@ All use .with_structured_output(JudicialOpinion) — freeform text is REJECTED.
 
 import logging
 import os
+import time
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -223,7 +224,10 @@ def prosecutor_node(state: AgentState) -> Dict[str, Any]:
         llm = get_judge_llm(temperature=0.1)  # Lowest temp: most skeptical, least creative
         structured_llm = llm.with_structured_output(JudicialOpinion)
 
-        for dim in repo_dims:
+        for i, dim in enumerate(repo_dims):
+            # Rate limiting: pause between calls to avoid Groq TPM limits
+            if i > 0:
+                time.sleep(3)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
@@ -269,7 +273,9 @@ def defense_node(state: AgentState) -> Dict[str, Any]:
         llm = get_judge_llm(temperature=0.3)
         structured_llm = llm.with_structured_output(JudicialOpinion)
 
-        for dim in repo_dims:
+        for i, dim in enumerate(repo_dims):
+            if i > 0:
+                time.sleep(3)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
@@ -314,7 +320,9 @@ def tech_lead_node(state: AgentState) -> Dict[str, Any]:
         llm = get_judge_llm(temperature=0.1)
         structured_llm = llm.with_structured_output(JudicialOpinion)
 
-        for dim in repo_dims:
+        for i, dim in enumerate(repo_dims):
+            if i > 0:
+                time.sleep(3)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims

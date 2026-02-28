@@ -304,8 +304,10 @@ def chief_justice_node(state: AgentState) -> Dict:
         remediation_plan=remediation_plan,
     )
 
-    # Serialize to Markdown
-    markdown_path = _serialize_to_markdown(report)
+    # Serialize to Markdown — write to the output_dir passed via state
+    # Default to "audit" if not specified
+    output_dir = state.get("output_dir", "audit")
+    markdown_path = _serialize_to_markdown(report, output_dir=output_dir)
     logger.info(f"[ChiefJustice] Audit report written to: {markdown_path}")
 
     return {"final_report": report}
