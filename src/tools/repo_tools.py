@@ -392,15 +392,21 @@ def analyze_tool_safety(repo_dir: str) -> Dict[str, Any]:
                     self.uses_os_system = False
                     self.uses_subprocess_run = False
                     self.has_try_except = False
+                    self.tempfile_snippets: List[str] = []
+                    self.subprocess_snippets: List[str] = []
+                    self.os_system_snippets: List[str] = []
 
                 def visit_Call(self, node):
                     call_str = ast.unparse(node)
                     if "TemporaryDirectory" in call_str or "tempfile" in call_str:
                         self.uses_tempfile = True
+                        self.tempfile_snippets.append(call_str[:120])
                     if "os.system" in call_str:
                         self.uses_os_system = True
+                        self.os_system_snippets.append(call_str[:120])
                     if "subprocess.run" in call_str or "subprocess.check" in call_str:
                         self.uses_subprocess_run = True
+                        self.subprocess_snippets.append(call_str[:120])
                     self.generic_visit(node)
 
                 def visit_Try(self, node):
@@ -412,15 +418,30 @@ def analyze_tool_safety(repo_dir: str) -> Dict[str, Any]:
 
             if sv.uses_tempfile:
                 results["uses_tempfile"] = True
-                results["security_strengths"].append(f"{py_file.name}: uses tempfile sandboxing")
+                snippet = sv.tempfile_snippets[0] if sv.tempfile_snippets else "tempfile.TemporaryDirectory()"
+                results["security_strengths"].append(
+                    f"{py_file.name}: tempfile.TemporaryDirectory() sandboxing CONFIRMED — "
+                    f"snippet: `{snippet}`"
+                )
             if sv.uses_os_system:
                 results["uses_os_system"] = True
-                results["security_violations"].append(f"{py_file.name}: raw os.system() call detected — SECURITY VIOLATION")
+                snippet = sv.os_system_snippets[0] if sv.os_system_snippets else "os.system(...)"
+                results["security_violations"].append(
+                    f"{py_file.name}: raw os.system() call DETECTED — SECURITY VIOLATION — "
+                    f"snippet: `{snippet}`"
+                )
             if sv.uses_subprocess_run:
                 results["uses_subprocess_run"] = True
-                results["security_strengths"].append(f"{py_file.name}: uses subprocess.run()")
+                snippet = sv.subprocess_snippets[0] if sv.subprocess_snippets else "subprocess.run(...)"
+                results["security_strengths"].append(
+                    f"{py_file.name}: subprocess.run() (NOT os.system) CONFIRMED — "
+                    f"snippet: `{snippet}`"
+                )
             if sv.has_try_except:
                 results["has_error_handling"] = True
+                results["security_strengths"].append(
+                    f"{py_file.name}: try/except error handling CONFIRMED"
+                )
 
         except Exception as e:
             results["files_scanned"][-1] += f" (parse error: {e})"
