@@ -33,9 +33,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def get_judge_llm(temperature: float = 0.3):
-    """Return LLM configured for structured judicial output."""
+    """
+    Return LLM configured for structured judicial output.
+    Priority: Groq (free, generous quota) → Google Gemini → OpenAI
+    """
+    groq_key = os.getenv("GROQ_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
+
+    if groq_key:
+        try:
+            from langchain_groq import ChatGroq
+            return ChatGroq(
+                model="llama-3.3-70b-versatile",
+                temperature=temperature,
+                groq_api_key=groq_key,
+            )
+        except ImportError:
+            logger.warning("[LLM] langchain-groq not installed, falling back.")
 
     if google_key:
         return ChatGoogleGenerativeAI(
@@ -45,12 +60,14 @@ def get_judge_llm(temperature: float = 0.3):
         )
     elif openai_key:
         return ChatOpenAI(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             temperature=temperature,
             api_key=openai_key,
         )
     else:
-        raise ValueError("No LLM API key found.")
+        raise ValueError(
+            "No LLM API key found. Set GROQ_API_KEY, GOOGLE_API_KEY, or OPENAI_API_KEY in .env"
+        )
 
 
 # ---------------------------------------------------------------------------
