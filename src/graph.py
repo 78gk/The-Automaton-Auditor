@@ -92,6 +92,7 @@ def context_builder_node(state: AgentState) -> Dict[str, Any]:
         "opinions": [],
         "errors": errors,
         "final_report": None,
+        "output_dir": state.get("output_dir", "audit"),
     }
 
 
@@ -238,6 +239,7 @@ def run_audit(repo_url: str, pdf_path: str = "", output_dir: str = "audit") -> D
     initial_state: AgentState = {
         "repo_url": repo_url,
         "pdf_path": pdf_path,
+        "output_dir": output_dir,
         "rubric_dimensions": [],
         "evidences": {},
         "opinions": [],

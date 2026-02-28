@@ -397,16 +397,34 @@ def analyze_tool_safety(repo_dir: str) -> Dict[str, Any]:
                     self.os_system_snippets: List[str] = []
 
                 def visit_Call(self, node):
+                    # Check for actual os.system() calls — not string mentions
+                    if isinstance(node.func, ast.Attribute):
+                        if (isinstance(node.func.value, ast.Name) and 
+                            node.func.value.id == 'os' and 
+                            node.func.attr == 'system'):
+                            call_str = ast.unparse(node)
+                            self.uses_os_system = True
+                            self.os_system_snippets.append(call_str[:120])
+                    elif isinstance(node.func, ast.Name):
+                        if node.func.id == 'system':
+                            # Could be os.system imported directly
+                            call_str = ast.unparse(node)
+                            self.uses_os_system = True
+                            self.os_system_snippets.append(call_str[:120])
+                    
+                    # Check for tempfile.TemporaryDirectory calls
                     call_str = ast.unparse(node)
-                    if "TemporaryDirectory" in call_str or "tempfile" in call_str:
+                    if 'TemporaryDirectory' in call_str:
                         self.uses_tempfile = True
                         self.tempfile_snippets.append(call_str[:120])
-                    if "os.system" in call_str:
-                        self.uses_os_system = True
-                        self.os_system_snippets.append(call_str[:120])
-                    if "subprocess.run" in call_str or "subprocess.check" in call_str:
-                        self.uses_subprocess_run = True
-                        self.subprocess_snippets.append(call_str[:120])
+                    
+                    # Check for subprocess.run calls
+                    if isinstance(node.func, ast.Attribute):
+                        if node.func.attr in ('run', 'check_output', 'check_call', 'Popen'):
+                            if isinstance(node.func.value, ast.Name) and node.func.value.id == 'subprocess':
+                                self.uses_subprocess_run = True
+                                self.subprocess_snippets.append(ast.unparse(node)[:120])
+                    
                     self.generic_visit(node)
 
                 def visit_Try(self, node):

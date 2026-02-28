@@ -127,6 +127,7 @@ class AgentState(TypedDict):
 
     repo_url: str
     pdf_path: str
+    output_dir: str
     rubric_dimensions: List[Dict]
 
     # Parallel-safe: each Detective writes to its own key (e.g., "repo", "doc", "vision")
