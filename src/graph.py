@@ -200,15 +200,29 @@ def build_graph() -> Any:
     builder.add_edge("DocAnalyst", "EvidenceAggregator")
     builder.add_edge("VisionInspector", "EvidenceAggregator")
 
-    # EvidenceAggregator → Judges [Fan-Out — parallel]
-    builder.add_edge("EvidenceAggregator", "Prosecutor")
-    builder.add_edge("EvidenceAggregator", "Defense")
-    builder.add_edge("EvidenceAggregator", "TechLead")
+    # EvidenceAggregator → Judicial layer
+    # Default: parallel fan-out (fast).
+    # Safety: when running on Groq-only, run sequentially to avoid 429 rate limits.
+    # If GROQ_API_KEY is present, the LLM factories will choose Groq first.
+    # Groq commonly 429s under parallel judge fan-out, so we default to sequential in that case.
+    using_groq = bool(os.getenv("GROQ_API_KEY"))
 
-    # All 3 Judges → ChiefJustice [Fan-In]
-    builder.add_edge("Prosecutor", "ChiefJustice")
-    builder.add_edge("Defense", "ChiefJustice")
-    builder.add_edge("TechLead", "ChiefJustice")
+    if using_groq:
+        # Sequential: EvidenceAggregator → Prosecutor → Defense → TechLead → ChiefJustice
+        builder.add_edge("EvidenceAggregator", "Prosecutor")
+        builder.add_edge("Prosecutor", "Defense")
+        builder.add_edge("Defense", "TechLead")
+        builder.add_edge("TechLead", "ChiefJustice")
+    else:
+        # Parallel fan-out
+        builder.add_edge("EvidenceAggregator", "Prosecutor")
+        builder.add_edge("EvidenceAggregator", "Defense")
+        builder.add_edge("EvidenceAggregator", "TechLead")
+
+        # Fan-in
+        builder.add_edge("Prosecutor", "ChiefJustice")
+        builder.add_edge("Defense", "ChiefJustice")
+        builder.add_edge("TechLead", "ChiefJustice")
 
     # ChiefJustice → END
     builder.add_edge("ChiefJustice", END)

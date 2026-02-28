@@ -206,6 +206,23 @@ The `rubric.json` file is the agent's **Constitution** — 10 forensic dimension
 9. Report Accuracy (Cross-Reference)
 10. Architectural Diagram Analysis
 
+## LangSmith Trace
+
+The complete end-to-end execution of the Automaton Auditor is traced in LangSmith for full observability:
+
+**🔗 Trace URL:** https://smith.langchain.com/public/8b41fac0-6194-4631-81fa-a2d1d1cdcd08/r
+
+**Project:** `automaton-auditor`
+
+The trace demonstrates:
+- ✅ Complete pipeline execution from START to END
+- ✅ All three detective agents running in parallel (fan-out)
+- ✅ Evidence aggregation (fan-in #1)
+- ✅ All three judge agents running in parallel (fan-out)
+- ✅ Chief Justice synthesis with deterministic conflict resolution (fan-in #2)
+- ✅ Structured outputs at each layer (Evidence → JudicialOpinion → AuditReport)
+- ✅ No terminal failures or unhandled errors
+
 ## Status
 
 | Layer | Status |
@@ -216,3 +233,4 @@ The `rubric.json` file is the agent's **Constitution** — 10 forensic dimension
 | Judicial Layer (Prosecutor, Defense, TechLead) | ✅ Complete — wired with `.with_structured_output(JudicialOpinion)` |
 | Chief Justice Synthesis | ✅ Complete — deterministic rules (Security Override, Fact Supremacy, Variance Rule) |
 | Full End-to-End Report | ✅ Complete — Markdown serialization to `audit/audit_report.md` |
+| LangSmith Tracing | ✅ Enabled — See trace URL above |
