@@ -216,6 +216,16 @@ def build_remediation(criterion_id: str, final_score: int, opinions: List[Judici
             3: "Add dissent_summary generation for criteria with variance > 2. Ensure output is a Markdown file, not console text.",
             5: "Chief Justice synthesis is complete. No remediation needed.",
         },
+        "report_accuracy": {
+            1: "Fix PDF cross-reference: ensure all file paths mentioned in the PDF actually exist in the repo. Update extraction + normalization in src/tools/doc_tools.py and ensure EvidenceAggregator cross-references against scan_directory_structure() full inventory.",
+            3: "Update the PDF to reference only real repo paths (e.g., src/state.py, src/graph.py, src/nodes/judges.py). Ensure DocAnalyst extracts paths conservatively and EvidenceAggregator uses all_files (not just key_files).",
+            5: "PDF-to-repo cross-reference is accurate. No remediation needed.",
+        },
+        "swarm_visual": {
+            1: "Add or update reports/stategraph_architecture.png to explicitly show BOTH fan-outs: START -> [3 Detectives] -> EvidenceAggregator -> [3 Judges] -> ChiefJustice -> END. Make parallel branches visually distinct.",
+            3: "Improve the diagram labeling: name each node (RepoInvestigator, DocAnalyst, VisionInspector, EvidenceAggregator, Prosecutor, Defense, TechLead, ChiefJustice). Show fan-out and fan-in points clearly.",
+            5: "Architecture diagram clearly represents the code graph. No remediation needed.",
+        },
     }
 
     templates = REMEDIATION_TEMPLATES.get(criterion_id, {})
@@ -383,6 +393,22 @@ def _serialize_to_markdown(report: AuditReport, output_dir: str = "audit") -> st
             lines.append(opinion.argument)
             if opinion.cited_evidence:
                 lines.append(f"*Cited evidence:* {', '.join(opinion.cited_evidence)}")
+            lines.append("")
+
+        # Deterministic rules applied (make governance explicit)
+        rules_applied = []
+        if criterion.dissent_summary:
+            ds = criterion.dissent_summary
+            if "SECURITY OVERRIDE" in ds:
+                rules_applied.append("security_override")
+            if "FACT SUPREMACY" in ds:
+                rules_applied.append("fact_supremacy")
+            if "DISSENT" in ds:
+                rules_applied.append("variance_rule")
+        if criterion.dimension_id in ARCHITECTURE_CRITERIA:
+            rules_applied.append("functionality_weight")
+        if rules_applied:
+            lines.append(f"**Rules applied:** {', '.join(sorted(set(rules_applied)))}")
             lines.append("")
 
         # Dissent summary (required when variance > 2)
