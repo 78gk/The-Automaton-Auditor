@@ -1,8 +1,8 @@
 # Automaton Auditor — Project Context
 
-**Last Updated:** 2026-02-26 (Thursday — Judicial Layer Day)
+**Last Updated:** 2026-02-27 (Friday — Peer Audit & Score Improvements)
 **Repository:** https://github.com/78gk/The-Automaton-Auditor
-**Current Status:** ✅ Interim submitted | ✅ Full graph wired | 🔄 Final submission Saturday
+**Current Status:** ✅ Interim submitted | ✅ Full graph wired | ✅ Peer audit done (tedoaba: 47/50) | ✅ Score improvements committed | 🔄 Self-audit pending (API quota) | 🔄 Final submission Saturday
 
 ---
 
