@@ -312,7 +312,7 @@ def prosecutor_node(state: AgentState) -> Dict[str, Any]:
                     SystemMessage(content=PROSECUTOR_SYSTEM_PROMPT),
                     HumanMessage(content=prompt),
                 ]
-                opinion: JudicialOpinion = structured_llm.invoke(messages)
+                opinion: JudicialOpinion = invoke_structured_with_retry(structured_llm, messages, retries=2)
                 # Enforce judge field
                 opinion = JudicialOpinion(
                     judge="Prosecutor",
@@ -365,7 +365,7 @@ def defense_node(state: AgentState) -> Dict[str, Any]:
                     SystemMessage(content=DEFENSE_SYSTEM_PROMPT),
                     HumanMessage(content=prompt),
                 ]
-                opinion: JudicialOpinion = structured_llm.invoke(messages)
+                opinion: JudicialOpinion = invoke_structured_with_retry(structured_llm, messages, retries=2)
                 opinion = JudicialOpinion(
                     judge="Defense",
                     criterion_id=dim["id"],
@@ -417,7 +417,7 @@ def tech_lead_node(state: AgentState) -> Dict[str, Any]:
                     SystemMessage(content=TECH_LEAD_SYSTEM_PROMPT),
                     HumanMessage(content=prompt),
                 ]
-                opinion: JudicialOpinion = structured_llm.invoke(messages)
+                opinion: JudicialOpinion = invoke_structured_with_retry(structured_llm, messages, retries=2)
                 opinion = JudicialOpinion(
                     judge="TechLead",
                     criterion_id=dim["id"],
