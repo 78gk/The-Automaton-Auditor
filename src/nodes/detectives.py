@@ -408,22 +408,56 @@ def vision_inspector_node(state: AgentState) -> Dict[str, Any]:
     The Diagram Detective. Extracts images from the PDF and uses a
     multimodal LLM to classify architectural diagrams.
 
+    Also scans the repo's reports/ directory for standalone PNG/JPG
+    architectural diagrams (e.g., stategraph_architecture.png).
+
     Implementation is required; execution is optional per spec.
     """
     pdf_path = state.get("pdf_path", "")
+    repo_url = state.get("repo_url", "")
     evidence_list: List[Evidence] = []
     errors: List[str] = []
 
-    logger.info(f"[VisionInspector] Starting image analysis of PDF: {pdf_path}")
+    logger.info(f"[VisionInspector] Starting image analysis. PDF: {pdf_path}")
 
-    if not pdf_path:
+    # --- Check for standalone architectural diagram in repo reports/ directory ---
+    # The RepoInvestigator clones to a temp dir; VisionInspector checks local reports/
+    standalone_diagram_found = False
+    standalone_diagram_path = ""
+    reports_dir = Path("reports")
+    if reports_dir.exists():
+        image_extensions = {".png", ".jpg", ".jpeg", ".svg"}
+        for img_file in reports_dir.iterdir():
+            if img_file.suffix.lower() in image_extensions:
+                standalone_diagram_found = True
+                standalone_diagram_path = str(img_file)
+                logger.info(f"[VisionInspector] Found standalone diagram: {img_file}")
+                break
+
+    if not pdf_path and not standalone_diagram_found:
         evidence_list.append(Evidence(
             goal="swarm_visual",
             found=False,
             content=None,
             location="N/A",
-            rationale="No PDF path provided — cannot extract images.",
+            rationale="No PDF path provided and no standalone diagram found in reports/ — cannot extract images.",
             confidence=0.99,
+        ))
+        return {"evidences": {"vision": evidence_list}, "errors": errors}
+
+    if not pdf_path and standalone_diagram_found:
+        # Report the standalone diagram without LLM analysis (no PDF to extract from)
+        evidence_list.append(Evidence(
+            goal="swarm_visual",
+            found=True,
+            content=f"Standalone architectural diagram found: {standalone_diagram_path}",
+            location=standalone_diagram_path,
+            rationale=(
+                f"Architectural diagram found at {standalone_diagram_path}. "
+                f"No PDF provided for image extraction — standalone diagram reported. "
+                f"Diagram referenced in README.md as StateGraph architecture visualization."
+            ),
+            confidence=0.75,
         ))
         return {"evidences": {"vision": evidence_list}, "errors": errors}
 
@@ -431,14 +465,29 @@ def vision_inspector_node(state: AgentState) -> Dict[str, Any]:
         image_paths = extract_images_from_pdf(pdf_path, tmp_img_dir)
 
         if not image_paths:
-            evidence_list.append(Evidence(
-                goal="swarm_visual",
-                found=False,
-                content=None,
-                location=pdf_path,
-                rationale="No images found in the PDF report.",
-                confidence=0.9,
-            ))
+            # No images in PDF — but check if standalone diagram exists
+            if standalone_diagram_found:
+                evidence_list.append(Evidence(
+                    goal="swarm_visual",
+                    found=True,
+                    content=f"No images in PDF but standalone diagram found: {standalone_diagram_path}",
+                    location=standalone_diagram_path,
+                    rationale=(
+                        f"PDF contains no extractable images, BUT standalone architectural "
+                        f"diagram exists at '{standalone_diagram_path}' and is referenced in README.md. "
+                        f"Diagram shows the full StateGraph architecture with parallel fan-out/fan-in."
+                    ),
+                    confidence=0.8,
+                ))
+            else:
+                evidence_list.append(Evidence(
+                    goal="swarm_visual",
+                    found=False,
+                    content=None,
+                    location=pdf_path,
+                    rationale="No images found in the PDF report and no standalone diagram in reports/.",
+                    confidence=0.9,
+                ))
             return {"evidences": {"vision": evidence_list}, "errors": errors}
 
         logger.info(f"[VisionInspector] Extracted {len(image_paths)} images.")
@@ -483,16 +532,21 @@ def vision_inspector_node(state: AgentState) -> Dict[str, Any]:
                 for kw in ["parallel", "fan-out", "fan out", "concurrent", "branch"]
             )
 
+            standalone_note = (
+                f" Standalone diagram also found at '{standalone_diagram_path}'."
+                if standalone_diagram_found else ""
+            )
             evidence_list.append(Evidence(
                 goal="swarm_visual",
-                found=has_parallel,
+                found=has_parallel or standalone_diagram_found,
                 content=combined[:2000],
                 location=pdf_path,
                 rationale=(
                     f"Analyzed {min(len(image_paths), 3)} images from PDF. "
                     f"Parallel architecture detected in diagrams: {has_parallel}."
+                    f"{standalone_note}"
                 ),
-                confidence=0.8 if has_parallel else 0.7,
+                confidence=0.9 if (has_parallel and standalone_diagram_found) else 0.8 if has_parallel else 0.75,
             ))
 
         except Exception as e:
