@@ -43,21 +43,45 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def get_llm(temperature: float = 0.0):
+    """Return the configured LLM.
+
+    Priority:
+    1) Ollama local (free) if `OLLAMA_MODEL` is set
+    2) Groq → Google Gemini → OpenAI
+
+    Env:
+    - OLLAMA_MODEL (e.g. "llama3.1:8b", "qwen2.5:7b")
+    - OLLAMA_BASE_URL (optional, default: http://localhost:11434)
     """
-    Return the configured LLM.
-    Priority: Groq (free, generous quota) → Google Gemini → OpenAI
-    """
+    ollama_model = os.getenv("OLLAMA_MODEL")
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
     groq_key = os.getenv("GROQ_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
+
+    if ollama_model:
+        try:
+            from langchain_ollama import ChatOllama
+            return ChatOllama(
+                model=ollama_model,
+                temperature=temperature,
+                base_url=ollama_base_url,
+            )
+        except ImportError as e:
+            raise ImportError(
+                "OLLAMA_MODEL is set but langchain-ollama is not installed. "
+                "Install it (pip install langchain-ollama) or unset OLLAMA_MODEL."
+            ) from e
 
     if groq_key:
         try:
             from langchain_groq import ChatGroq
             return ChatGroq(
-                model="llama-3.3-70b-versatile",
+                model="llama-3.1-8b-instant",
                 temperature=temperature,
                 groq_api_key=groq_key,
+                max_tokens=600,
             )
         except ImportError:
             logger.warning("[LLM] langchain-groq not installed, falling back.")
@@ -140,12 +164,18 @@ def repo_investigator_node(state: AgentState) -> Dict[str, Any]:
         dir_data = scan_directory_structure(clone_target)
         key_files = dir_data.get("key_files", {})
 
+        # IMPORTANT: include full file inventory so DocAnalyst cross-referencing can be accurate.
+        # The EvidenceAggregator expects `all_files` for report_accuracy verification.
         evidence_list.append(Evidence(
             goal="directory_structure",
             found=key_files.get("src/state.py", False),
-            content=json.dumps(key_files, indent=2),
+            content=json.dumps(dir_data, indent=2),
             location="repository root",
-            rationale=f"Scanned {dir_data['total_files']} files. Key files presence: {key_files}",
+            rationale=(
+                f"Scanned {dir_data['total_files']} files. "
+                f"Key files presence: {key_files}. "
+                f"Included full file inventory for PDF cross-reference."
+            ),
             confidence=0.99,
         ))
 
@@ -507,9 +537,56 @@ def vision_inspector_node(state: AgentState) -> Dict[str, Any]:
 
         logger.info(f"[VisionInspector] Extracted {len(image_paths)} images.")
 
-        # Analyze images with multimodal LLM
+        # Analyze images with multimodal LLM (optional)
+        # Default: skip LLM vision analysis to avoid failures/quotas during audits.
+        # Enable by setting VISION_LLM_ENABLED=true and configuring OpenAI or Google.
+        if os.getenv("VISION_LLM_ENABLED", "").lower() not in {"1", "true", "yes"}:
+            evidence_list.append(Evidence(
+                goal="swarm_visual",
+                found=standalone_diagram_found or bool(image_paths),
+                content=(
+                    f"Extracted {len(image_paths)} image(s) from PDF. "
+                    f"Standalone diagram: {standalone_diagram_path if standalone_diagram_found else 'N/A'}. "
+                    "Skipped LLM image analysis (VISION_LLM_ENABLED not set)."
+                ),
+                location=standalone_diagram_path or pdf_path,
+                rationale=(
+                    "Vision analysis is optional per spec. Skipping multimodal LLM calls by default for stability."
+                ),
+                confidence=0.8 if standalone_diagram_found else 0.6,
+            ))
+            return {"evidences": {"vision": evidence_list}, "errors": errors}
+
+        # Groq models are text-only and will 400 on image_url payloads.
+        # For vision, prefer Google/OpenAI explicitly; if neither is available, skip analysis.
+        google_key = os.getenv("GOOGLE_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+
+        if not google_key and not openai_key:
+            evidence_list.append(Evidence(
+                goal="swarm_visual",
+                found=standalone_diagram_found or bool(image_paths),
+                content=(
+                    f"Extracted {len(image_paths)} image(s) from PDF. "
+                    f"Standalone diagram: {standalone_diagram_path if standalone_diagram_found else 'N/A'}. "
+                    "Skipped LLM image analysis because no vision-capable provider key is configured."
+                ),
+                location=standalone_diagram_path or pdf_path,
+                rationale=(
+                    "Vision analysis is optional per spec. Image extraction succeeded, but no vision-capable "
+                    "LLM provider was configured (Google/OpenAI)."
+                ),
+                confidence=0.8 if standalone_diagram_found else 0.6,
+            ))
+            return {"evidences": {"vision": evidence_list}, "errors": errors}
+
         try:
-            llm = get_llm(temperature=0.0)
+            # Prefer OpenAI for vision here because Google free tier may be quota-limited.
+            llm = (
+                ChatOpenAI(model="gpt-4o-mini", temperature=0.0, api_key=openai_key)
+                if openai_key else
+                ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.0, google_api_key=google_key)
+            )
             vision_prompt = (
                 "You are a forensic diagram analyst. Analyze this architectural diagram.\n\n"
                 "Answer the following:\n"

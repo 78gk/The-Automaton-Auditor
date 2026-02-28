@@ -206,20 +206,35 @@ def analyze_theoretical_depth(doc_data: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def extract_file_paths_from_text(text: str) -> List[str]:
+    """Extract repo-relative file paths mentioned in text.
+
+    We intentionally keep this conservative to reduce false positives:
+    - only paths containing at least one slash
+    - extensions 1-6 chars
+    - trims punctuation and normalizes separators
     """
-    Extract file paths mentioned in text (e.g., 'src/tools/repo_tools.py').
-    Uses regex to find path-like patterns.
-    """
-    # Match patterns like src/something.py, ./path/to/file.ext
-    pattern = r"(?:src/|\.\/|[a-zA-Z0-9_\-]+/)[\w/\-\.]+\.\w{1,6}"
+    # Capture common forms: src/... , ./... , docs/... , reports/... , etc.
+    pattern = r"(?:(?:\./)?(?:src|docs|reports|audit|tests?)/[\w\-./]+\.[A-Za-z0-9]{1,6})"
     matches = re.findall(pattern, text)
-    # Deduplicate while preserving order
+
+    def normalize(p: str) -> str:
+        p = p.strip().strip('`').strip('"').strip("'")
+        p = p.rstrip('.,;:()[]{}<>')  # trailing punctuation
+        p = p.replace('\\\\', '/').replace('\\', '/')
+        if p.startswith('./'):
+            p = p[2:]
+        # collapse duplicate slashes
+        while '//' in p:
+            p = p.replace('//', '/')
+        return p
+
     seen = set()
-    unique = []
+    unique: List[str] = []
     for m in matches:
-        if m not in seen:
-            seen.add(m)
-            unique.append(m)
+        nm = normalize(m)
+        if nm and nm not in seen:
+            seen.add(nm)
+            unique.append(nm)
     return unique
 
 
@@ -232,14 +247,33 @@ def cross_reference_paths(
     files that actually exist in the repository.
     Returns verified vs. hallucinated paths.
     """
-    # Normalize paths (forward slashes)
-    normalized_actual = {f.replace("\\", "/") for f in actual_files}
+    # Normalize paths (forward slashes, no leading ./)
+    def _norm(p: str) -> str:
+        p = p.replace("\\", "/")
+        if p.startswith("./"):
+            p = p[2:]
+        # collapse duplicate slashes
+        while "//" in p:
+            p = p.replace("//", "/")
+        return p
+
+    normalized_actual = {_norm(f) for f in actual_files}
 
     verified = []
     hallucinated = []
 
     for path in mentioned_paths:
-        norm_path = path.replace("\\", "/").lstrip("./")
+        norm_path = path.strip()
+        # remove common wrappers
+        norm_path = norm_path.strip('"').strip("'")
+        norm_path = norm_path.replace('`', '')
+        # remove trailing punctuation only (keep leading ./ for explicit handling)
+        norm_path = norm_path.rstrip('.,;:()[]{}<>')
+        norm_path = norm_path.replace("\\", "/")
+        if norm_path.startswith("./"):
+            norm_path = norm_path[2:]
+        if norm_path.startswith("/"):
+            norm_path = norm_path[1:]
         # Check exact match or suffix match
         if norm_path in normalized_actual or any(
             f.endswith(norm_path) for f in normalized_actual
