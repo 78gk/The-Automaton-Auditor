@@ -130,7 +130,7 @@ from src.graph import run_audit
 
 result = run_audit(
     repo_url="https://github.com/owner/repo",
-    pdf_path="reports/interim_report.pdf",
+    pdf_path="reports/final_report.pdf",
     output_dir="audit/report_onself_generated"
 )
 
@@ -164,7 +164,8 @@ automaton-auditor/
 │       ├── repo_tools.py     # Git clone (sandboxed), AST parser
 │       └── doc_tools.py      # PDF ingestion (docling), cross-reference
 ├── reports/
-│   ├── interim_report.pdf         # Interim architectural report
+│   ├── final_report.pdf           # Final architectural report (Saturday submission)
+│   ├── interim_report.pdf         # Interim architectural report (Wednesday submission)
 │   └── stategraph_architecture.png  # StateGraph architecture diagram
 ├── audit/
 │   ├── report_onself_generated/   # Self-audit report (agent on own repo)
