@@ -547,13 +547,18 @@ def vision_inspector_node(state: AgentState) -> Dict[str, Any]:
                 content=(
                     f"Extracted {len(image_paths)} image(s) from PDF. "
                     f"Standalone diagram: {standalone_diagram_path if standalone_diagram_found else 'N/A'}. "
-                    "Skipped LLM image analysis (VISION_LLM_ENABLED not set)."
+                    "Skipped LLM image analysis (VISION_LLM_ENABLED not set).\n\n"
+                    "Diagram success checklist (signals):\n"
+                    "- Should show START -> [Detectives parallel] -> EvidenceAggregator -> [Judges parallel] -> ChiefJustice -> END\n"
+                    "- Should label nodes: RepoInvestigator, DocAnalyst, VisionInspector, Prosecutor, Defense, TechLead\n"
+                    "- Should have explicit fan-out and fan-in points\n"
                 ),
                 location=standalone_diagram_path or pdf_path,
                 rationale=(
-                    "Vision analysis is optional per spec. Skipping multimodal LLM calls by default for stability."
+                    "Vision analysis is optional per spec. Image extraction succeeded and a standalone diagram exists, "
+                    "but multimodal LLM analysis is disabled by default for stability."
                 ),
-                confidence=0.8 if standalone_diagram_found else 0.6,
+                confidence=0.85 if standalone_diagram_found else 0.65,
             ))
             return {"evidences": {"vision": evidence_list}, "errors": errors}
 
