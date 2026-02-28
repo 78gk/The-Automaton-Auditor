@@ -92,7 +92,8 @@ def context_builder_node(state: AgentState) -> Dict[str, Any]:
         "opinions": [],
         "errors": errors,
         "final_report": None,
-        "output_dir": state.get("output_dir", "audit"),
+        # output_dir is set in initial_state — don't return it here
+        # (returning plain str fields from parallel nodes causes merge conflicts)
     }
 
 

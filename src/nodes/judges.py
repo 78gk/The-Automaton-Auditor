@@ -225,9 +225,9 @@ def prosecutor_node(state: AgentState) -> Dict[str, Any]:
         structured_llm = llm.with_structured_output(JudicialOpinion)
 
         for i, dim in enumerate(repo_dims):
-            # Rate limiting: pause between calls to avoid Groq TPM limits
+            # Rate limiting: pause between calls to stay under Groq 12K TPM
             if i > 0:
-                time.sleep(3)
+                time.sleep(10)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
@@ -261,6 +261,10 @@ def defense_node(state: AgentState) -> Dict[str, Any]:
     The Defense Attorney Judge — optimistic, rewards effort and intent.
     Uses .with_structured_output(JudicialOpinion) for schema enforcement.
     """
+    # Stagger startup 35s after Prosecutor to avoid Groq TPM collision
+    logger.info("[Defense] Waiting 35s before starting (TPM stagger)...")
+    time.sleep(35)
+    logger.info("[Defense] Starting judicial evaluation.")
     evidences = state.get("evidences", {})
     rubric_dims = state.get("rubric_dimensions", [])
     opinions: List[JudicialOpinion] = []
@@ -275,7 +279,7 @@ def defense_node(state: AgentState) -> Dict[str, Any]:
 
         for i, dim in enumerate(repo_dims):
             if i > 0:
-                time.sleep(3)
+                time.sleep(10)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
@@ -308,6 +312,10 @@ def tech_lead_node(state: AgentState) -> Dict[str, Any]:
     The Tech Lead Judge — pragmatic, evaluates architectural soundness.
     Uses .with_structured_output(JudicialOpinion) for schema enforcement.
     """
+    # Stagger startup 70s after Prosecutor to avoid Groq TPM collision
+    logger.info("[TechLead] Waiting 70s before starting (TPM stagger)...")
+    time.sleep(70)
+    logger.info("[TechLead] Starting judicial evaluation.")
     evidences = state.get("evidences", {})
     rubric_dims = state.get("rubric_dimensions", [])
     opinions: List[JudicialOpinion] = []
@@ -322,7 +330,7 @@ def tech_lead_node(state: AgentState) -> Dict[str, Any]:
 
         for i, dim in enumerate(repo_dims):
             if i > 0:
-                time.sleep(3)
+                time.sleep(10)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
