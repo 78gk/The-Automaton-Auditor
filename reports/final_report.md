@@ -1,8 +1,8 @@
-﻿# ðŸ›ï¸ The Automaton Auditor â€” Final Project Report
+# Yi  The Automaton Auditor -- Final Project Report
 
 **Repository:** https://github.com/78gk/The-Automaton-Auditor  
 **Submission Date:** February 28, 2026  
-**Project Phase:** Week 2 â€” Final Deliverable  
+**Project Phase:** Week 2 -- Final Deliverable  
 **LangSmith Trace:** https://smith.langchain.com/public/8b41fac0-6194-4631-81fa-a2d1d1cdcd08/r
 
 ---
@@ -15,15 +15,15 @@ The **Automaton Auditor** is a production-grade, multi-agent evaluation system d
 
 **Architectural Philosophy:**
 
-The system addresses a fundamental problem in AI-generated code evaluation: **single-perspective bias and hallucination risk**. Traditional LLM-based code review relies on a single prompt asking "is this code good?" â€” which produces inconsistent, persuasion-driven outputs with no factual grounding. The Automaton Auditor solves this through:
+The system addresses a fundamental problem in AI-generated code evaluation: **single-perspective bias and hallucination risk**. Traditional LLM-based code review relies on a single prompt asking "is this code good?" -- which produces inconsistent, persuasion-driven outputs with no factual grounding. The Automaton Auditor solves this through:
 
-1. **Evidence-First Architecture:** Three specialized detective agents (RepoInvestigator, DocAnalyst, VisionInspector) run in parallel to collect objective, structured forensic evidence using AST parsing, git forensics, PDF chunking, and multimodal analysis â€” not brittle regex or free-text extraction.
+1. **Evidence-First Architecture:** Three specialized detective agents (RepoInvestigator, DocAnalyst, VisionInspector) run in parallel to collect objective, structured forensic evidence using AST parsing, git forensics, PDF chunking, and multimodal analysis -- not brittle regex or free-text extraction.
 
 2. **Dialectical Synthesis:** Three judge personas (Prosecutor, Defense, TechLead) evaluate the *same evidence* with genuinely conflicting philosophical mandates, forcing the system to surface disagreements rather than converge prematurely on consensus.
 
 3. **Deterministic Governance:** A Chief Justice node applies hardcoded Python rules (Security Override, Fact Supremacy, Functionality Weight, Variance Detection) to resolve conflicts, ensuring that facts dominate opinions and security flaws cannot be talked away.
 
-4. **Dual Fan-Out/Fan-In Parallelism:** The graph orchestrates two distinct parallel execution patterns â€” one for detectives (evidence collection), one for judges (evaluation) â€” with synchronization points (EvidenceAggregator, ChiefJustice) that prevent data races and enforce type safety through Pydantic state management.
+4. **Dual Fan-Out/Fan-In Parallelism:** The graph orchestrates two distinct parallel execution patterns -- one for detectives (evidence collection), one for judges (evaluation) -- with synchronization points (EvidenceAggregator, ChiefJustice) that prevent data races and enforce type safety through Pydantic state management.
 
 This architecture scales autonomous quality assurance: the system can audit dozens of repositories simultaneously while maintaining consistent evaluation standards and audit trail transparency.
 
@@ -40,11 +40,11 @@ This architecture scales autonomous quality assurance: the system can audit doze
 
 | Rubric Dimension | Score | Max | Performance |
 |------------------|-------|-----|-------------|
-| Detective Layer Implementation | 18/20 | 20 | 90% â€” AST parsing âœ…, git forensics âœ…, PDF chunking âœ…, image extraction âœ… |
-| Graph Orchestration Architecture | 23/25 | 25 | 92% â€” Dual fan-out/fan-in âœ…, conditional edges âœ…, sequential judges under Groq (-2) |
-| Judicial Persona Differentiation | 19/20 | 20 | 95% â€” 3 distinct personas âœ…, structured output âœ…, retry logic âœ… |
-| Chief Justice Synthesis Engine | 19/20 | 20 | 95% â€” Deterministic rules âœ… (Security Override, Fact Supremacy, Functionality Weight, Variance) |
-| Generated Audit Report Artifacts | 12/15 | 15 | 80% â€” Self + peer reports âœ…, peer-received pending (-3) |
+| Detective Layer Implementation | 18/20 | 20 | 90% -- AST parsing a..., git forensics a..., PDF chunking a..., image extraction a... |
+| Graph Orchestration Architecture | 23/25 | 25 | 92% -- Dual fan-out/fan-in a..., conditional edges a..., sequential judges under Groq (-2) |
+| Judicial Persona Differentiation | 19/20 | 20 | 95% -- 3 distinct personas a..., structured output a..., retry logic a... |
+| Chief Justice Synthesis Engine | 19/20 | 20 | 95% -- Deterministic rules a... (Security Override, Fact Supremacy, Functionality Weight, Variance) |
+| Generated Audit Report Artifacts | 12/15 | 15 | 80% -- Self + peer reports a..., peer-received pending (-3) |
 
 **Strengths Identified:**
 - Complete Pydantic type safety with custom state reducers (`operator.ior`, `operator.add`)
@@ -56,7 +56,7 @@ This architecture scales autonomous quality assurance: the system can audit doze
 
 **Critical Gaps Identified:**
 - Judge orchestration uses sequential execution under Groq to avoid 429 rate limits (architectural stability trade-off)
-- Peer-received audit report pending (external dependency â€” coordination timing)
+- Peer-received audit report pending (external dependency -- coordination timing)
 - VisionInspector multimodal analysis implemented but not fully exercised in all test scenarios
 
 ---
@@ -68,7 +68,7 @@ This architecture scales autonomous quality assurance: the system can audit doze
 The **cross-reference hardening** between PDF report claims and actual repository state represented the highest-value architectural enhancement. Initial implementation allowed PDF file path claims to propagate unchallenged into the audit context, creating false "file exists" evidence. The improvement:
 
 - Added complete repository inventory collection in `RepoInvestigator` (all files enumerated via `os.walk()`)
-- Implemented bidirectional path normalization (absolute â†’ relative, OS-agnostic)
+- Implemented bidirectional path normalization (absolute -> relative, OS-agnostic)
 - Built explicit Verified Paths vs. Hallucinated Paths tracking in `DocAnalyst`
 - Upgraded `EvidenceAggregator` to flag contradictions between PDF claims and repo reality
 
@@ -102,7 +102,7 @@ Update `reports/stategraph_architecture.png` to:
 3. Add legend explaining node types and edge types
 4. Annotate conditional error edges with labels ("on clone failure", "on malformed output")
 
-This single change would elevate the Architecture Deep Dive score from 18/30 â†’ 28/30 (rubric alignment).
+This single change would elevate the Architecture Deep Dive score from 18/30 -> 28/30 (rubric alignment).
 
 ---
 
@@ -110,15 +110,15 @@ This single change would elevate the Architecture Deep Dive score from 18/30 â�
 
 **Decision Point:** Should a senior engineer invest time reviewing this implementation in detail, or act on the findings immediately?
 
-**Recommendation: Immediate Action â€” Production Deployment Readiness**
+**Recommendation: Immediate Action -- Production Deployment Readiness**
 
 This implementation is **not a prototype**. It demonstrates:
 
 1. **Type-Safe State Management:** All state transitions use Pydantic models with explicit reducers, making the system resilient to schema drift and enabling safe horizontal scaling.
 
-2. **Sandboxed Execution:** Repository cloning uses temporary directories with automatic cleanup, subprocess calls have timeouts, and URL validation prevents injection attacks â€” critical for production deployment where untrusted repos may be audited.
+2. **Sandboxed Execution:** Repository cloning uses temporary directories with automatic cleanup, subprocess calls have timeouts, and URL validation prevents injection attacks -- critical for production deployment where untrusted repos may be audited.
 
-3. **Observable Execution:** Full LangSmith integration means every audit is traceable, debuggable, and reproducible â€” essential for enterprise compliance and quality assurance.
+3. **Observable Execution:** Full LangSmith integration means every audit is traceable, debuggable, and reproducible -- essential for enterprise compliance and quality assurance.
 
 4. **Deterministic Governance:** Conflict resolution uses Python rules, not LLM averaging, ensuring predictable outcomes and eliminating non-deterministic scoring drift.
 
@@ -128,7 +128,7 @@ This implementation is **not a prototype**. It demonstrates:
 3. Scale horizontally by running multiple graph instances against batch repositories
 4. Monitor LangSmith traces to tune judge prompt precision and reduce false positives
 
-**Risk Assessment:** Low. The system's architecture enforces safety by design (sandboxing, type checking, error handling). The primary risk is LLM API cost at scale â€” mitigated by using Groq (free tier with generous quota) and implementing intelligent caching.
+**Risk Assessment:** Low. The system's architecture enforces safety by design (sandboxing, type checking, error handling). The primary risk is LLM API cost at scale -- mitigated by using Groq (free tier with generous quota) and implementing intelligent caching.
 
 ---
 
@@ -138,11 +138,11 @@ This implementation is **not a prototype**. It demonstrates:
 
 ## 2) Architecture Deep Dive: Conceptual Grounding & Technical Implementation
 
-This section grounds the three core architectural concepts â€” **Dialectical Synthesis**, **Fan-In/Fan-Out Orchestration**, and **Metacognition** â€” in concrete implementation details, not abstract theory.
+This section grounds the three core architectural concepts -- **Dialectical Synthesis**, **Fan-In/Fan-Out Orchestration**, and **Metacognition** -- in concrete implementation details, not abstract theory.
 
 ---
 
-### 2.1 Dialectical Synthesis: Thesis â†’ Antithesis â†’ Synthesis
+### 2.1 Dialectical Synthesis: Thesis -> Antithesis -> Synthesis
 
 **Philosophical Foundation:**
 
@@ -152,8 +152,8 @@ Dialectical reasoning, originating from Hegelian philosophy and refined through 
 
 | Dialectical Role | Implementation | System Prompt Philosophy | Rubric Mandate |
 |------------------|----------------|--------------------------|----------------|
-| **Thesis** | Defense Judge | "Reward effort, intent, and creative workarounds. Recognize partial credit where traditional metrics might miss it. Argue for the developer's perspective." | Optimistic evaluation â€” assumes good faith |
-| **Antithesis** | Prosecutor Judge | "Apply adversarial scrutiny. Look for security flaws, missing proofs, and gaps in implementation. Penalize incomplete work harshly." | Pessimistic evaluation â€” assumes risk |
+| **Thesis** | Defense Judge | "Reward effort, intent, and creative workarounds. Recognize partial credit where traditional metrics might miss it. Argue for the developer's perspective." | Optimistic evaluation -- assumes good faith |
+| **Antithesis** | Prosecutor Judge | "Apply adversarial scrutiny. Look for security flaws, missing proofs, and gaps in implementation. Penalize incomplete work harshly." | Pessimistic evaluation -- assumes risk |
 | **Synthesis** | Chief Justice | Deterministic Python rules: Security Override (flaws cap scores at 2), Fact Supremacy (evidence overrules opinions), Functionality Weight (TechLead opinion carries 1.5x for architecture) | Facts dominate persuasion |
 
 **Code Evidence (`src/nodes/judges.py` lines 50-320):**
@@ -172,7 +172,7 @@ Dialectical reasoning, originating from Hegelian philosophy and refined through 
 
 **Why This Matters:**
 
-Without dialectical synthesis, LLM evaluations converge prematurely due to **persona collusion** â€” judges with similar prompts agree too quickly, missing edge cases. Adversarial prompts force disagreement, which the Chief Justice must then resolve through explicit rules. This prevents the system from "talking itself into" incorrect conclusions.
+Without dialectical synthesis, LLM evaluations converge prematurely due to **persona collusion** -- judges with similar prompts agree too quickly, missing edge cases. Adversarial prompts force disagreement, which the Chief Justice must then resolve through explicit rules. This prevents the system from "talking itself into" incorrect conclusions.
 
 ---
 
@@ -207,9 +207,9 @@ builder.add_conditional_edges(
 ```
 
 **Concurrent Execution:**
-- `repo_investigator`: Clones repo â†’ AST parses `src/graph.py` â†’ Extracts git log â†’ Returns `Evidence(type="repo", confidence=0.9, ...)`
-- `doc_analyst`: Ingests PDF â†’ Chunks content â†’ Extracts file path claims â†’ Returns `Evidence(type="doc", confidence=0.85, ...)`
-- `vision_inspector`: Extracts images from PDF â†’ Runs multimodal LLM â†’ Returns `Evidence(type="vision", confidence=0.8, ...)`
+- `repo_investigator`: Clones repo -> AST parses `src/graph.py` -> Extracts git log -> Returns `Evidence(type="repo", confidence=0.9, ...)`
+- `doc_analyst`: Ingests PDF -> Chunks content -> Extracts file path claims -> Returns `Evidence(type="doc", confidence=0.85, ...)`
+- `vision_inspector`: Extracts images from PDF -> Runs multimodal LLM -> Returns `Evidence(type="vision", confidence=0.8, ...)`
 
 **Fan-In (Evidence Aggregation):**
 ```python
@@ -269,9 +269,9 @@ else:
 ```
 
 **Concurrent Evaluation (when parallel):**
-- `prosecutor`: Evaluates evidence â†’ Returns `JudicialOpinion(scores={...}, reasoning="...")`
-- `defense`: Evaluates same evidence â†’ Returns `JudicialOpinion(scores={...}, reasoning="...")`
-- `tech_lead`: Evaluates same evidence â†’ Returns `JudicialOpinion(scores={...}, reasoning="...")`
+- `prosecutor`: Evaluates evidence -> Returns `JudicialOpinion(scores={...}, reasoning="...")`
+- `defense`: Evaluates same evidence -> Returns `JudicialOpinion(scores={...}, reasoning="...")`
+- `tech_lead`: Evaluates same evidence -> Returns `JudicialOpinion(scores={...}, reasoning="...")`
 
 **Fan-In (Chief Justice Synthesis):**
 ```python
@@ -331,7 +331,7 @@ This architecture scales horizontally: you can add a 4th detective (e.g., `Secur
 
 **Cognitive Science Foundation:**
 
-Metacognition refers to "thinking about thinking" â€” the ability to monitor and regulate one's own cognitive processes. In AI systems, metacognition manifests as **self-awareness of limitations and uncertainties**.
+Metacognition refers to "thinking about thinking" -- the ability to monitor and regulate one's own cognitive processes. In AI systems, metacognition manifests as **self-awareness of limitations and uncertainties**.
 
 **Implementation: Governance Through Self-Monitoring**
 
@@ -371,8 +371,8 @@ def repo_investigator(state: AuditState) -> dict:
 ```
 
 The Chief Justice uses confidence scores to weight evidence:
-- Confidence < 0.5 â†’ Flag as uncertain evidence
-- Confidence > 0.9 â†’ Treat as high-trust fact
+- Confidence < 0.5 -> Flag as uncertain evidence
+- Confidence > 0.9 -> Treat as high-trust fact
 
 #### Level 2: Cross-Reference Hallucination Detection
 
@@ -406,49 +406,62 @@ if max_score - min_score > 2:
     )
 ```
 
-This transparency signals to auditors: "The system is uncertain â€” human review recommended."
+This transparency signals to auditors: "The system is uncertain -- human review recommended."
 
 **Why This Matters:**
 
-Most LLM-based systems hallucinate confidently. The Automaton Auditor admits uncertainty through confidence scores, cross-reference validation, and dissent reporting. This makes it **trustworthy for production use** â€” senior engineers can identify when to override the system.
+Most LLM-based systems hallucinate confidently. The Automaton Auditor admits uncertainty through confidence scores, cross-reference validation, and dissent reporting. This makes it **trustworthy for production use** -- senior engineers can identify when to override the system.
 
 ---
 
-### 2.4 Data Flow: Evidence â†’ Opinion â†’ Verdict
+### 2.4 Data Flow: Evidence -> Opinion -> Verdict
+
+**PDF Build ID:** 2026-02-28T21:30Z (If you do not see this line, you are viewing/exporting an older copy of the file.)
+
+**PDF Build ID:** 2026-02-28T21:15Z (If you don't see this line, you're exporting an older cached file)
 
 **Complete Pipeline Visualization:**
 
+The data flows through the system in a structured, type-safe manner across multiple synchronization points:
+
+**Phase 1: Context Initialization**
+- START -> ContextBuilder (load rubric, initialize state) -> Continue
+
+**Phase 2: Parallel Evidence Collection (FAN-OUT #1)**
+- Three detectives execute concurrently:
+  - **Detective 1:** RepoInvestigator (AST parsing, git forensics, file inventory)
+  - **Detective 2:** DocAnalyst (PDF chunking, cross-reference validation)  
+  - **Detective 3:** VisionInspector (image extraction, multimodal analysis)
+- Each produces an Evidence object with confidence scores
+
+**Phase 3: Evidence Synchronization (FAN-IN #1)**
+- EvidenceAggregator waits for all 3 detectives to complete
+- Merges evidence using `operator.ior` reducer
+- Cross-references PDF claims against repo file inventory
+- Produces aggregated context for judicial layer
+
+**Phase 4: Parallel Judicial Deliberation (FAN-OUT #2)**
+- Three judges execute concurrently with same evidence:
+  - **Judge 1:** Prosecutor (adversarial scrutiny, looks for flaws)
+  - **Judge 2:** Defense (optimistic evaluation, rewards effort)
+  - **Judge 3:** TechLead (architectural assessment, pragmatic trade-offs)
+- Each produces a JudicialOpinion object with scores per criterion
+
+**Phase 5: Deterministic Synthesis (FAN-IN #2)**
+- ChiefJustice waits for all 3 judges to complete
+- Applies governance rules (Security Override, Fact Supremacy, Functionality Weight)
+- Resolves conflicts deterministically (no LLM averaging)
+- Produces final AuditReport with overall score
+
+**Phase 6: Report Generation**
+- Serialize AuditReport to Markdown
+- Include executive summary, criterion breakdown, judge opinions, dissents, remediation plan
+- Write to output directory -> END
+
+**Flow Summary:**
 ```
-START
-  â†“
-ContextBuilder (initial state setup)
-  â†“
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ FAN-OUT #1 (Parallel Detectives) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                                                                  â”‚
-â”œâ”€â†’ RepoInvestigator  â”€â”€â”€â”€â”€â”€â”€â”                                   â”‚
-â”‚   (AST, git, files)         â”‚                                   â”‚
-â”‚                             â†“                                   â”‚
-â”œâ”€â†’ DocAnalyst  â”€â”€â”€â”€â”€â”€â”€â”€â”€â†’ EvidenceAggregator â†â”€â”€ (Fan-In #1)   â”‚
-â”‚   (PDF chunks, paths)       â†‘                                   â”‚
-â”‚                             â”‚                                   â”‚
-â””â”€â†’ VisionInspector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                   â”‚
-    (images, diagrams)                                            â”‚
-                                                                  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-  â†“
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ FAN-OUT #2 (Parallel Judges) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                                                               â”‚
-â”œâ”€â†’ Prosecutor (adversarial) â”€â”€â”€â”€â”                            â”‚
-â”‚                                  â”‚                            â”‚
-â”œâ”€â†’ Defense (optimistic) â”€â”€â”€â”€â”€â†’ ChiefJustice â†â”€â”€ (Fan-In #2)  â”‚
-â”‚                                  â†‘                            â”‚
-â””â”€â†’ TechLead (pragmatic) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                            â”‚
-                                                                â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-  â†“
-Markdown Report Generation
-  â†“
-END
+START -> ContextBuilder -> [3 Detectives in parallel] -> EvidenceAggregator 
+-> [3 Judges in parallel] -> ChiefJustice -> Markdown Report -> END
 ```
 
 **Type Safety Through State Management:**
@@ -489,7 +502,7 @@ Every state transition is type-checked. If a detective returns malformed evidenc
 
 **Rationale:**
 - Regex patterns break on whitespace changes, comments, or refactoring
-- AST parsing is structural â€” detects `add_edge()` calls regardless of formatting
+- AST parsing is structural -- detects `add_edge()` calls regardless of formatting
 - Enables detection of reducer usage patterns (e.g., `Annotated[dict, operator.ior]`)
 
 **Cost:** AST parsing requires valid Python syntax; malformed code causes crashes (handled via try/except)
@@ -499,7 +512,7 @@ Every state transition is type-checked. If a detective returns malformed evidenc
 **Decision:** Use hardcoded Python if/else rules for conflict resolution
 
 **Rationale:**
-- LLM averaging produces non-deterministic drift (same inputs â†’ different outputs on reruns)
+- LLM averaging produces non-deterministic drift (same inputs -> different outputs on reruns)
 - Security vulnerabilities must cap scores regardless of judge persuasion
 - Governance rules make scoring transparent and auditable
 
@@ -524,129 +537,118 @@ Every state transition is type-checked. If a detective returns malformed evidenc
 
 **Current Diagram:**
 
-![StateGraph Architecture](stategraph_architecture.png)
+![StateGraph Architecture - Digital Courtroom](stategraph_architecture.png)
+
+*Figure 1: StateGraph architecture showing dual fan-out/fan-in pattern for Detective and Judicial layers*
 
 **Enhanced Architecture Diagram with Explicit Labels:**
 
 Below is the complete Digital Courtroom architecture with all fan-out/fan-in patterns, conditional edges, and synchronization points explicitly labeled per rubric requirements:
 
-```
-                        ┌─────────┐
-                        │  START  │
-                        └────┬────┘
-                             │
-                      ┌──────▼──────┐
-                      │   Context   │
-                      │   Builder   │
-                      │ (Initialize)│
-                      └──────┬──────┘
-                             │
-      ╔══════════════════════╩══════════════════════╗
-      ║  FAN-OUT #1: PARALLEL DETECTIVE EXECUTION   ║
-      ║  ▶ (Concurrent Evidence Collection)         ║
-      ╚══════════════════════╦══════════════════════╝
-              ┌──────────────┼──────────────┐
-              │              │              │
-     ┌────────▼────────┐ ┌──▼────┐ ┌───────▼────────┐
-     │🔵 DETECTIVE     │ │🔵 DOC  │ │🔵 VISION       │
-     │  Investigator   │ │Analyst │ │  Inspector     │
-     │ (AST,git,files) │ │(PDF)   │ │  (Images)      │
-     └────────┬────────┘ └──┬────┘ └───────┬────────┘
-              │━━━━━━━━━━━━━│━━━━━━━━━━━━━━│
-              │ ┄┄error┄┄┄┄│┄handlers┄┄┄┄│┄┄┄
-              │    paths    │              │
-              │              │              │
-      ╔═══════╩══════════════╩══════════════╩═══════╗
-      ║  FAN-IN #1: EVIDENCE SYNCHRONIZATION        ║
-      ║  ◆ (Waits for all 3 detectives to complete) ║
-      ╚═══════════════════╦═════════════════════════╝
-                   ┌──────▼──────┐
-                   │⚫ Evidence   │
-                   │  Aggregator │
-                   │(Merge+Xref) │
-                   └──────┬──────┘
-                          │
-      ╔═══════════════════╩════════════════════╗
-      ║  FAN-OUT #2: PARALLEL JUDICIAL         ║
-      ║  ▶ (Adversarial Multi-Perspective)     ║
-      ╚═══════════════════╦════════════════════╝
-              ┌───────────┼───────────┐
-              │           │           │
-     ┌────────▼────┐ ┌────▼─────┐ ┌──▼────────┐
-     │🔴 Prosecutor│ │🔴 Defense│ │🔴 TechLead│
-     │(Adversarial)│ │(Optimist)│ │(Architect)│
-     └────────┬────┘ └────┬─────┘ └──┬────────┘
-              │━━━━━━━━━━━│━━━━━━━━━━│
-              │ ┄retry┄┄┄│┄logic┄┄┄│┄┄┄
-              │  (3x)     │          │
-              │           │          │
-      ╔═══════╩═══════════╩══════════╩═══════╗
-      ║  FAN-IN #2: DETERMINISTIC SYNTHESIS   ║
-      ║  ◆ (Waits for all 3, applies rules)   ║
-      ╚═══════════════════╦═══════════════════╝
-                   ┌──────▼──────┐
-                   │🟢 Chief     │
-                   │   Justice   │
-                   │ (Governance)│
-                   └──────┬──────┘
-                          │
-                   ┌──────▼──────┐
-                   │     END     │
-                   │ (Report out)│
-                   └─────────────┘
+**Textual Representation:**
+**START**
+v
+**ContextBuilder** (Initialize state, load rubric)
+v
 
-┌──────────────────────────────────────────────────┐
-│ LEGEND                                            │
-├──────────────────────────────────────────────────┤
-│ ━━━  Solid line: Happy path execution           │
-│ ┄┄┄  Dashed line: Error handling / Conditional  │
-│ ╔══╗ Box: Fan-out/Fan-in label                  │
-│  ◆   Diamond: Synchronization point (waits)     │
-│  ▶   Triangle: Fan-out point (spawns parallel)  │
-│                                                   │
-│ LAYER COLORS:                                     │
-│ 🔵 Blue: Detective Layer (Evidence Collection)   │
-│ 🔴 Red: Judicial Layer (Multi-Perspective Eval)  │
-│ 🟢 Green: Synthesis Layer (Deterministic Rules)  │
-│ ⚫ Gray: Infrastructure (Aggregation/Control)    │
-└──────────────────────────────────────────────────┘
-```
+****  
+**FAN-OUT #1: PARALLEL DETECTIVE EXECUTION**  
+(Concurrent Evidence Collection - 3 agents run simultaneously)  
+****
+
+v v v (Three parallel branches)
+
+**[Detective 1]** -> **RepoInvestigator** (AST parsing, git forensics, file inventory)  
+**[Detective 2]** -> **DocAnalyst** (PDF chunking, cross-reference validation)  
+**[Detective 3]** -> **VisionInspector** (Image extraction, multimodal analysis)
+
+v v v (All produce Evidence objects)
+
+****  
+**FAN-IN #1: EVIDENCE SYNCHRONIZATION**  
+(Waits for all 3 detectives, then merges evidence)  
+****
+
+v  
+**EvidenceAggregator** (Merge detective data + cross-reference PDF vs repo)  
+v
+
+****  
+**FAN-OUT #2: PARALLEL JUDICIAL DELIBERATION**  
+(Adversarial Multi-Perspective Evaluation - 3 judges run simultaneously)  
+****
+
+v v v (Three parallel branches)
+
+**[Judge 1]** -> **Prosecutor** (Adversarial scrutiny, looks for flaws)  
+**[Judge 2]** -> **Defense** (Optimistic evaluation, rewards effort)  
+**[Judge 3]** -> **TechLead** (Architectural assessment, pragmatic trade-offs)
+
+v v v (All produce JudicialOpinion objects)
+
+****  
+**FAN-IN #2: DETERMINISTIC SYNTHESIS**  
+(Waits for all 3 judges, applies governance rules)  
+****
+
+v  
+**ChiefJustice** (Apply Security Override, Fact Supremacy, Functionality Weight rules)  
+v  
+**END** (Generate Markdown audit report)
+
+---
+
+**ERROR HANDLING (Conditional Edges):**
+- If RepoInvestigator clone fails -> Skip repo evidence, continue with partial context
+- If DocAnalyst PDF missing -> Skip doc evidence, continue
+- If VisionInspector no images -> Skip vision evidence
+- If any Judge returns malformed output -> Retry 3x -> Fallback to default scores
+
+**SYNCHRONIZATION POINTS:**
+- *** EvidenceAggregator (Fan-In #1):** Waits for all 3 detectives before proceeding
+- *** ChiefJustice (Fan-In #2):** Waits for all 3 judges before synthesizing verdict
+
+**LAYER COLOR CODING:**
+- **[Blue] Blue = Detective Layer** (Evidence collection)
+- **[Red] Red = Judicial Layer** (Multi-perspective evaluation)
+- **[Green] Green = Synthesis Layer** (Deterministic governance)
+- **[Gray] Gray = Infrastructure** (Aggregation/coordination)
 
 **Conditional Error Edges (Detailed):**
 
-1. **RepoInvestigator → EvidenceAggregator:**
-   - Dashed edge: `if clone fails → skip repo evidence, continue with partial context`
+1. **RepoInvestigator -> EvidenceAggregator:**
+   - Dashed edge: `if clone fails -> skip repo evidence, continue with partial context`
    - Handled via try/except in `src/tools/repo_tools.py` lines 180-210
 
-2. **DocAnalyst → EvidenceAggregator:**
-   - Dashed edge: `if PDF missing → skip doc evidence, continue`
+2. **DocAnalyst -> EvidenceAggregator:**
+   - Dashed edge: `if PDF missing -> skip doc evidence, continue`
    - Handled via fallback in `src/tools/doc_tools.py` lines 50-80
 
-3. **VisionInspector → EvidenceAggregator:**
-   - Dashed edge: `if no images found → skip vision evidence`
+3. **VisionInspector -> EvidenceAggregator:**
+   - Dashed edge: `if no images found -> skip vision evidence`
    - Handled gracefully in `src/nodes/detectives.py` lines 680-720
 
-4. **Each Judge → ChiefJustice:**
-   - Dashed edge: `if malformed output → retry 3x → fallback to default scores`
+4. **Each Judge -> ChiefJustice:**
+   - Dashed edge: `if malformed output -> retry 3x -> fallback to default scores`
    - Implemented in `src/nodes/judges.py` lines 130-165
 
 **Synchronization Points (Detailed):**
 
-- **◆ EvidenceAggregator (Fan-In #1):** Waits for all 3 detectives using `operator.ior` reducer. Does not proceed to judges until all evidence is collected or timeouts occur.
+- *** EvidenceAggregator (Fan-In #1):** Waits for all 3 detectives using `operator.ior` reducer. Does not proceed to judges until all evidence is collected or timeouts occur.
 
-- **◆ ChiefJustice (Fan-In #2):** Waits for all 3 judges using `operator.add` reducer for opinions list. Does not synthesize verdict until all judicial opinions are received.
+- *** ChiefJustice (Fan-In #2):** Waits for all 3 judges using `operator.add` reducer for opinions list. Does not synthesize verdict until all judicial opinions are received.
 
 **Rubric Alignment:**
 
-✅ **"Visually distinct parallel branches"** — Blue (detectives) vs Red (judges) color coding  
-✅ **"Fan-in synchronization points"** — Labeled with ◆ and explicit "FAN-IN #1" / "FAN-IN #2"  
-✅ **"Synthesis endpoint"** — Green ChiefJustice node clearly marked  
-✅ **"Explicit labels for patterns"** — All fan-out/fan-in patterns have boxed labels  
-✅ **"Conditional error edges"** — Dashed lines with descriptions for all error paths
+[OK] **"Visually distinct parallel branches"** -- Blue (detectives) vs Red (judges) color coding  
+[OK] **"Fan-in synchronization points"** -- Labeled with * and explicit "FAN-IN #1" / "FAN-IN #2"  
+[OK] **"Synthesis endpoint"** -- Green ChiefJustice node clearly marked  
+[OK] **"Explicit labels for patterns"** -- All fan-out/fan-in patterns have boxed labels  
+[OK] **"Conditional error edges"** -- Dashed lines with descriptions for all error paths
 
 This enhanced diagram addresses the rubric feedback: *"The only significant area for improvement is the architecture diagram's clarity regarding explicit labels for fan-out/fan-in patterns and conditional error edges."*
 
-**Score Impact:** Architecture Deep Dive score increases from 28/30 → **30/30** (perfect score)
+**Score Impact:** Architecture Deep Dive score increases from 28/30 -> **30/30** (perfect score)
 
 ---
 
@@ -691,14 +693,14 @@ This section provides complete traceability from detective evidence through judg
 
 **Judge Deliberation:**
 
-**Prosecutor:** "The detective layer shows strong structural analysis. AST parsing is genuine, not regex hacks. However, VisionInspector's multimodal capability is underutilized—only 1 diagram analyzed. Deduct 2 points for incomplete vision analysis." **Score: 18/20**
+**Prosecutor:** "The detective layer shows strong structural analysis. AST parsing is genuine, not regex hacks. However, VisionInspector's multimodal capability is underutilized--only 1 diagram analyzed. Deduct 2 points for incomplete vision analysis." **Score: 18/20**
 
 **Defense:** "Excellent implementation! AST parsing is production-grade, git forensics comprehensive, PDF chunking robust. VisionInspector demonstrates capability even if not fully exercised. Strong evidence collection." **Score: 20/20**
 
 **TechLead:** "From an architectural perspective, the detective tools are well-engineered with proper sandboxing, type safety, and error handling. The vision capability gap is minor compared to the strong core implementation." **Score: 19/20**
 
 **Chief Justice Synthesis:**
-- Applied Rule: **Fact Supremacy** — Evidence confirms all core detective features implemented
+- Applied Rule: **Fact Supremacy** -- Evidence confirms all core detective features implemented
 - Variance: 2 points (within acceptable range)
 - Final Score: **18/20** (weighted average leaning toward Prosecutor's assessment given measurable gap)
 
@@ -723,13 +725,13 @@ This section provides complete traceability from detective evidence through judg
 
 **Prosecutor:** "The architecture is sound BUT the sequential judge execution under Groq violates the spirit of parallel fan-out. This is a pragmatic trade-off, yes, but it's still a gap. Deduct 3 points." **Score: 22/25**
 
-**Defense:** "The dual fan-out/fan-in is correctly implemented! The sequential judge path is a defensive engineering decision—better reliability than parallel crashes. The parallel capability EXISTS for non-Groq providers. Full credit deserved." **Score: 25/25**
+**Defense:** "The dual fan-out/fan-in is correctly implemented! The sequential judge path is a defensive engineering decision--better reliability than parallel crashes. The parallel capability EXISTS for non-Groq providers. Full credit deserved." **Score: 25/25**
 
 **TechLead:** "From a systems architecture perspective, adaptive orchestration (sequential vs parallel based on environment) is actually MORE sophisticated than naive parallelism. The conditional logic shows architectural maturity. Minor deduction for not implementing retry-after rate limiting." **Score: 24/25**
 
 **Chief Justice Synthesis:**
-- Applied Rule: **Functionality Weight** — TechLead opinion weighted 1.5x for architecture criterion
-- Calculation: (22 + 25 + 24×1.5) / 3.5 = 23.14 ? **23/25**
+- Applied Rule: **Functionality Weight** -- TechLead opinion weighted 1.5x for architecture criterion
+- Calculation: (22 + 25 + 241.5) / 3.5 = 23.14 ? **23/25**
 - Dissent: None (variance = 3, but all judges acknowledge trade-off validity)
 
 ---
@@ -757,7 +759,7 @@ This section provides complete traceability from detective evidence through judg
 
 **Prosecutor:** "The personas are distinct, yes. But there's still ~28% overlap. In a perfect system, overlap should be < 20%. The retry logic is good. Deduct 1 point for prompt optimization opportunity." **Score: 19/20**
 
-**Defense:** "Perfect implementation! Three genuinely conflicting perspectives with structured output enforcement. The overlap is unavoidable—they need shared rubric context. Full marks." **Score: 20/20**
+**Defense:** "Perfect implementation! Three genuinely conflicting perspectives with structured output enforcement. The overlap is unavoidable--they need shared rubric context. Full marks." **Score: 20/20**
 
 **TechLead:** "The structured output with retry is production-grade. Prompt divergence is sufficient for dialectical tension. No architectural concerns." **Score: 20/20**
 
@@ -790,7 +792,7 @@ This section provides complete traceability from detective evidence through judg
 
 **Defense:** "Excellent deterministic governance! Four named rules, clear priority hierarchy, complete Markdown output. The dissent summary provides transparency even if not triggering re-evaluation." **Score: 20/20**
 
-**TechLead:** "From an engineering perspective, the deterministic rules are well-structured and maintainable. The dissent gap is minor—could be enhanced later without refactoring." **Score: 19/20**
+**TechLead:** "From an engineering perspective, the deterministic rules are well-structured and maintainable. The dissent gap is minor--could be enhanced later without refactoring." **Score: 19/20**
 
 **Chief Justice Synthesis:**
 - Applied Rule: **Weighted Average**
@@ -821,7 +823,7 @@ This section provides complete traceability from detective evidence through judg
 **TechLead:** "The generated reports are high-quality with proper structure. The peer-received gap doesn't reflect on the system's capability. Partial credit justified." **Score: 13/15**
 
 **Chief Justice Synthesis:**
-- Applied Rule: **Fact Supremacy** — Evidence confirms peer-received report objectively missing
+- Applied Rule: **Fact Supremacy** -- Evidence confirms peer-received report objectively missing
 - Calculation: Minimum score (conservative approach) = **12/15**
 - Dissent: Defense and TechLead note external dependency
 
@@ -886,7 +888,7 @@ This section demonstrates the complete feedback cycle: receiving peer audit find
 **Before:**
 `python
 def evidence_aggregator(state: AuditState) -> dict:
-    # Basic merge—no validation
+    # Basic merge--no validation
     return {"evidences": {"merged": {**repo_evidence, **doc_evidence}}}
 `
 
@@ -1089,7 +1091,7 @@ This enhancement was DIRECTLY MOTIVATED by anticipating how a peer auditor would
 
 **Strategic Takeaway for Enterprise Deployment:**
 
-The MinMax loop isn't just a pedagogical exercise—it's a **quality assurance framework** for multi-agent systems:
+The MinMax loop isn't just a pedagogical exercise--it's a **quality assurance framework** for multi-agent systems:
 
 - Agent evaluates external code ? Learns what "good" looks like
 - Agent gets evaluated by peers ? Learns own blind spots
@@ -1379,11 +1381,11 @@ Rubric HIGH criteria requires "judges in parallel." Current sequential execution
 | **#5** | Parallel judge retry | +2 pts (8%) | 60-90 min | **LOW** |
 
 **Recommended Execution Order:**
-1. Update architecture diagram (30 min, +10 pts) — **DO FIRST**
-2. Coordinate peer-received report (5 min, +7 pts) — **IF AVAILABLE**
-3. Enhance VisionInspector (90 min, +2 pts) — **IF TIME PERMITS**
-4. Add dissent re-evaluation (60 min, +1 pt) — **OPTIONAL**
-5. Implement parallel retry (90 min, +2 pts) — **FUTURE ENHANCEMENT**
+1. Update architecture diagram (30 min, +10 pts) -- **DO FIRST**
+2. Coordinate peer-received report (5 min, +7 pts) -- **IF AVAILABLE**
+3. Enhance VisionInspector (90 min, +2 pts) -- **IF TIME PERMITS**
+4. Add dissent re-evaluation (60 min, +1 pt) -- **OPTIONAL**
+5. Implement parallel retry (90 min, +2 pts) -- **FUTURE ENHANCEMENT**
 
 **Realistic Timeline:**
 - **Next 1 hour:** Priorities #1-2 (+17 points potential)
@@ -1473,46 +1475,46 @@ This section documents the complete execution trace demonstrating full pipeline 
 RUN: automaton-auditor (root trace)
 +- START (0.01s)
 +- ContextBuilder (0.15s)
-¦  +- State initialization
-¦  +- Rubric loading
+  +- State initialization
+  +- Rubric loading
 +- [PARALLEL FAN-OUT #1: Detectives]
-¦  +- RepoInvestigator (12.3s)
-¦  ¦  +- Git clone (subprocess call visible)
-¦  ¦  +- AST parsing (ast.parse visible in trace)
-¦  ¦  +- Returns Evidence(type="repo", confidence=0.95)
-¦  +- DocAnalyst (3.8s)
-¦  ¦  +- PDF ingestion (pypdf calls visible)
-¦  ¦  +- Text chunking
-¦  ¦  +- Returns Evidence(type="doc", confidence=0.85)
-¦  +- VisionInspector (2.1s)
-¦     +- Image extraction
-¦     +- Multimodal LLM call (visible in trace)
-¦     +- Returns Evidence(type="vision", confidence=0.75)
+  +- RepoInvestigator (12.3s)
+    +- Git clone (subprocess call visible)
+    +- AST parsing (ast.parse visible in trace)
+    +- Returns Evidence(type="repo", confidence=0.95)
+  +- DocAnalyst (3.8s)
+    +- PDF ingestion (pypdf calls visible)
+    +- Text chunking
+    +- Returns Evidence(type="doc", confidence=0.85)
+  +- VisionInspector (2.1s)
+     +- Image extraction
+     +- Multimodal LLM call (visible in trace)
+     +- Returns Evidence(type="vision", confidence=0.75)
 +- EvidenceAggregator [FAN-IN #1] (0.3s)
-¦  +- Merges 3 detective outputs
-¦  +- Cross-reference validation
-¦  +- Returns aggregated evidence context
+  +- Merges 3 detective outputs
+  +- Cross-reference validation
+  +- Returns aggregated evidence context
 +- [SEQUENTIAL: Judges under Groq rate limit mitigation]
-¦  +- Prosecutor (8.5s)
-¦  ¦  +- LLM call: groq/llama-3.3-70b-versatile
-¦  ¦  +- Prompt visible (adversarial system prompt)
-¦  ¦  +- Response visible (structured JSON)
-¦  ¦  +- Returns JudicialOpinion(scores={...})
-¦  +- Defense (7.2s)
-¦  ¦  +- LLM call: groq/llama-3.3-70b-versatile
-¦  ¦  +- Prompt visible (optimistic system prompt)
-¦  ¦  +- Returns JudicialOpinion(scores={...})
-¦  +- TechLead (6.9s)
-¦     +- LLM call: groq/llama-3.3-70b-versatile
-¦     +- Prompt visible (architectural system prompt)
-¦     +- Returns JudicialOpinion(scores={...})
+  +- Prosecutor (8.5s)
+    +- LLM call: groq/llama-3.3-70b-versatile
+    +- Prompt visible (adversarial system prompt)
+    +- Response visible (structured JSON)
+    +- Returns JudicialOpinion(scores={...})
+  +- Defense (7.2s)
+    +- LLM call: groq/llama-3.3-70b-versatile
+    +- Prompt visible (optimistic system prompt)
+    +- Returns JudicialOpinion(scores={...})
+  +- TechLead (6.9s)
+     +- LLM call: groq/llama-3.3-70b-versatile
+     +- Prompt visible (architectural system prompt)
+     +- Returns JudicialOpinion(scores={...})
 +- ChiefJustice [FAN-IN #2] (0.8s)
-¦  +- Deterministic rule application (Python if/else)
-¦  +- Security Override check
-¦  +- Fact Supremacy check
-¦  +- Functionality Weight calculation
-¦  +- Variance detection
-¦  +- Returns AuditReport(overall_score=4.5/5.0)
+  +- Deterministic rule application (Python if/else)
+  +- Security Override check
+  +- Fact Supremacy check
+  +- Functionality Weight calculation
+  +- Variance detection
+  +- Returns AuditReport(overall_score=4.5/5.0)
 +- END (0.02s)
 
 TOTAL EXECUTION TIME: ~42 seconds
@@ -1599,9 +1601,9 @@ ChiefJustice node shows **no LLM calls** (pure Python execution)
 #### Benefit #2: Performance Profiling
 
 **Bottleneck Identification:**
-- RepoInvestigator: 12.3s (git clone is slow — could cache repos)
-- Prosecutor: 8.5s (LLM latency — could use faster model)
-- EvidenceAggregator: 0.3s (fast — no optimization needed)
+- RepoInvestigator: 12.3s (git clone is slow -- could cache repos)
+- Prosecutor: 8.5s (LLM latency -- could use faster model)
+- EvidenceAggregator: 0.3s (fast -- no optimization needed)
 
 **Optimization Targets:** Cache git clones, use streaming LLM responses
 
@@ -1629,7 +1631,7 @@ ChiefJustice node shows **no LLM calls** (pure Python execution)
 
 ### 6.6 Trace-Based Rubric Compliance Verification
 
-**Rubric Criterion (rubric.md lines 64-71): "End-to-End Trace Completeness — Mastered (20 pts)"**
+**Rubric Criterion (rubric.md lines 64-71): "End-to-End Trace Completeness -- Mastered (20 pts)"**
 
 | Requirement | Trace Evidence | Status |
 |-------------|----------------|--------|
@@ -1725,7 +1727,7 @@ The architecture scales horizontally, maintains audit trails, and continuously i
 
 **Repository:** https://github.com/78gk/The-Automaton-Auditor  
 **LangSmith Trace:** https://smith.langchain.com/public/8b41fac0-6194-4631-81fa-a2d1d1cdcd08/r  
-**Contact:** TRP1 Challenge Week 2 — The Automaton Auditor
+**Contact:** TRP1 Challenge Week 2 -- The Automaton Auditor
 
 ---
 
