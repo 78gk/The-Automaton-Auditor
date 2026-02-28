@@ -1,11 +1,18 @@
 """
-Automaton Auditor — Judicial Layer Nodes
+Automaton Auditor — Judicial Layer Nodes (FULLY IMPLEMENTED)
 Implements Prosecutor, Defense, and TechLead as parallel LangGraph nodes.
 Each judge receives the same evidence and produces a distinct JudicialOpinion
 using .with_structured_output(JudicialOpinion) for strict schema enforcement.
 
-STATUS: Implementation scheduled for Thursday (Day 4).
-Stubs present to satisfy interim repo structure requirements.
+All three judge nodes are LIVE and wired into src/graph.py:
+  EvidenceAggregator → [Prosecutor ‖ Defense ‖ TechLead] → ChiefJustice
+
+Architecture:
+- Prosecutor (temp=0.1): adversarial, finds gaps/security flaws/laziness
+- Defense    (temp=0.3): optimistic, rewards effort/intent/creativity
+- TechLead   (temp=0.1): pragmatic, evaluates architectural soundness
+
+All use .with_structured_output(JudicialOpinion) — freeform text is REJECTED.
 """
 
 import logging
