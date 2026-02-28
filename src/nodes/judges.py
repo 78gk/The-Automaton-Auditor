@@ -34,21 +34,45 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def get_judge_llm(temperature: float = 0.3):
+    """Return LLM configured for structured judicial output.
+
+    Priority (industry-standard defaults):
+    1) Ollama local (free) if `OLLAMA_MODEL` is set
+    2) Groq → Google Gemini → OpenAI
+
+    Env:
+    - OLLAMA_MODEL (e.g. "llama3.1:8b", "qwen2.5:7b")
+    - OLLAMA_BASE_URL (optional, default: http://localhost:11434)
     """
-    Return LLM configured for structured judicial output.
-    Priority: Groq (free, generous quota) → Google Gemini → OpenAI
-    """
+    ollama_model = os.getenv("OLLAMA_MODEL")
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
     groq_key = os.getenv("GROQ_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
+
+    if ollama_model:
+        try:
+            from langchain_ollama import ChatOllama
+            return ChatOllama(
+                model=ollama_model,
+                temperature=temperature,
+                base_url=ollama_base_url,
+            )
+        except ImportError as e:
+            raise ImportError(
+                "OLLAMA_MODEL is set but langchain-ollama is not installed. "
+                "Install it (pip install langchain-ollama) or unset OLLAMA_MODEL."
+            ) from e
 
     if groq_key:
         try:
             from langchain_groq import ChatGroq
             return ChatGroq(
-                model="llama-3.3-70b-versatile",
+                model="llama-3.1-8b-instant",
                 temperature=temperature,
                 groq_api_key=groq_key,
+                max_tokens=900,
             )
         except ImportError:
             logger.warning("[LLM] langchain-groq not installed, falling back.")
@@ -80,6 +104,11 @@ PROSECUTOR_SYSTEM_PROMPT = """You are THE PROSECUTOR in a Digital Courtroom audi
 CORE PHILOSOPHY: "Trust No One. Assume Vibe Coding."
 YOUR MISSION: Find gaps, security flaws, architectural laziness, and shortcuts.
 
+SCORING GUIDANCE (to enforce dialectics):
+- Default range: 1-3
+- If evidence is ambiguous, score LOWER and explain what's missing.
+- A 4-5 requires exceptionally strong, explicit evidence.
+
 STRICT RULES:
 - If parallelism is claimed but the graph is linear → charge "Orchestration Fraud" → Score: 1
 - If judges return freeform text instead of Pydantic models → charge "Hallucination Liability" → Score: 2 max
@@ -108,6 +137,11 @@ DEFENSE_SYSTEM_PROMPT = """You are THE DEFENSE ATTORNEY in a Digital Courtroom a
 
 CORE PHILOSOPHY: "Reward Effort and Intent. Look for the Spirit of the Law."
 YOUR MISSION: Highlight creative workarounds, deep thought, and effort — even in imperfect implementations.
+
+SCORING GUIDANCE (to enforce dialectics):
+- Default range: 3-5
+- If evidence is ambiguous, argue for PARTIAL CREDIT and score HIGHER than the Prosecutor.
+- A 1-2 is reserved for catastrophic failure with zero evidence of intent.
 
 MITIGATION STRATEGIES:
 - If the graph fails to compile but the AST parsing logic is sophisticated → argue "Deep Code Comprehension" → Boost from 1 to 3
@@ -138,6 +172,10 @@ TECH_LEAD_SYSTEM_PROMPT = """You are THE TECH LEAD in a Digital Courtroom auditi
 CORE PHILOSOPHY: "Does it actually work? Is it maintainable? Will it scale?"
 YOUR MISSION: Evaluate architectural soundness, code cleanliness, and practical production viability.
 
+SCORING GUIDANCE (to enforce dialectics):
+- Default range: 2-4 (you are rarely a 1 unless it's fundamentally broken; rarely a 5 unless it's production-grade)
+- If Prosecutor is harsh and Defense is generous, you should land in the middle UNLESS evidence clearly supports one side.
+
 TECHNICAL PRECEDENTS:
 - "Pydantic Rigor": State using plain dicts = "Technical Debt" → Score: 3 (works but brittle)
 - "Sandboxed Tooling": os.system for git = "Security Negligence" → Overrides all effort points
@@ -161,19 +199,25 @@ You MUST:
 # ---------------------------------------------------------------------------
 
 def format_evidence_for_judges(evidences: Dict[str, List[Evidence]]) -> str:
-    """Format all collected evidence into a structured context string for judges."""
-    lines = ["# FORENSIC EVIDENCE SUMMARY\n"]
+    """Format evidence into a compact context string for judges.
+
+    This must be small to avoid Groq TPM rate limits. We intentionally:
+    - cap evidence items per detective
+    - omit large content excerpts
+    - truncate rationale
+    """
+    lines = ["# FORENSIC EVIDENCE SUMMARY (COMPACT)\n"]
     for detective, ev_list in evidences.items():
         lines.append(f"## {detective.upper()} DETECTIVE FINDINGS\n")
-        for ev in ev_list:
-            status = "✓ FOUND" if ev.found else "✗ NOT FOUND"
-            lines.append(f"### {ev.goal} [{status}]")
-            lines.append(f"- **Location:** {ev.location}")
-            lines.append(f"- **Confidence:** {ev.confidence:.0%}")
-            lines.append(f"- **Rationale:** {ev.rationale}")
-            if ev.content:
-                lines.append(f"- **Content excerpt:**\n```\n{ev.content[:500]}\n```")
-            lines.append("")
+        for ev in (ev_list or [])[:6]:
+            status = "✓" if ev.found else "✗"
+            rationale = (ev.rationale or "").strip().replace("\n", " ")
+            if len(rationale) > 160:
+                rationale = rationale[:160] + "..."
+            lines.append(f"- {status} **{ev.goal}** (conf={ev.confidence:.0%}) @ {ev.location}")
+            if rationale:
+                lines.append(f"  - rationale: {rationale}")
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -204,6 +248,35 @@ Stay strictly in character. Do NOT break persona."""
 
 
 # ---------------------------------------------------------------------------
+# Structured invocation helpers (retry on malformed output)
+# ---------------------------------------------------------------------------
+
+def invoke_structured_with_retry(structured_llm, messages, *, retries: int = 2) -> JudicialOpinion:
+    """Invoke a structured LLM call with small retries.
+
+    Some providers/models occasionally return malformed JSON or partial outputs.
+    We retry with a stronger formatting instruction while keeping the same evidence.
+    """
+    last_err: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            return structured_llm.invoke(messages)
+        except Exception as e:
+            last_err = e
+            # Add an explicit formatting reminder (as a final user turn)
+            messages = list(messages) + [
+                HumanMessage(
+                    content=(
+                        "FORMAT REMINDER: You MUST return a valid structured JudicialOpinion object. "
+                        "No prose outside the schema. If uncertain, choose a conservative score and cite evidence keys."
+                    )
+                )
+            ]
+    assert last_err is not None
+    raise last_err
+
+
+# ---------------------------------------------------------------------------
 # Judge Nodes (Parallel Execution)
 # ---------------------------------------------------------------------------
 
@@ -218,16 +291,19 @@ def prosecutor_node(state: AgentState) -> Dict[str, Any]:
     errors: List[str] = []
 
     evidence_context = format_evidence_for_judges(evidences)
-    repo_dims = [d for d in rubric_dims if d.get("target_artifact") == "github_repo"]
+
+    # Evaluate ALL rubric dimensions (repo + pdf_report + pdf_images).
+    # Evidence context already includes RepoInvestigator, DocAnalyst, and VisionInspector findings.
+    repo_dims = rubric_dims
 
     try:
         llm = get_judge_llm(temperature=0.1)  # Lowest temp: most skeptical, least creative
         structured_llm = llm.with_structured_output(JudicialOpinion)
 
         for i, dim in enumerate(repo_dims):
-            # Rate limiting: pause between calls to stay under Groq 12K TPM
+            # Rate limiting: brief pause between calls to reduce collisions while keeping runtime manageable
             if i > 0:
-                time.sleep(10)
+                time.sleep(1)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
@@ -261,9 +337,7 @@ def defense_node(state: AgentState) -> Dict[str, Any]:
     The Defense Attorney Judge — optimistic, rewards effort and intent.
     Uses .with_structured_output(JudicialOpinion) for schema enforcement.
     """
-    # Stagger startup 35s after Prosecutor to avoid Groq TPM collision
-    logger.info("[Defense] Waiting 35s before starting (TPM stagger)...")
-    time.sleep(35)
+    # When running sequentially (Groq-only mode), extra staggering just slows the run.
     logger.info("[Defense] Starting judicial evaluation.")
     evidences = state.get("evidences", {})
     rubric_dims = state.get("rubric_dimensions", [])
@@ -271,7 +345,10 @@ def defense_node(state: AgentState) -> Dict[str, Any]:
     errors: List[str] = []
 
     evidence_context = format_evidence_for_judges(evidences)
-    repo_dims = [d for d in rubric_dims if d.get("target_artifact") == "github_repo"]
+
+    # Evaluate ALL rubric dimensions (repo + pdf_report + pdf_images).
+    # Evidence context already includes RepoInvestigator, DocAnalyst, and VisionInspector findings.
+    repo_dims = rubric_dims
 
     try:
         llm = get_judge_llm(temperature=0.3)
@@ -279,7 +356,7 @@ def defense_node(state: AgentState) -> Dict[str, Any]:
 
         for i, dim in enumerate(repo_dims):
             if i > 0:
-                time.sleep(10)
+                time.sleep(1)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
@@ -312,9 +389,7 @@ def tech_lead_node(state: AgentState) -> Dict[str, Any]:
     The Tech Lead Judge — pragmatic, evaluates architectural soundness.
     Uses .with_structured_output(JudicialOpinion) for schema enforcement.
     """
-    # Stagger startup 70s after Prosecutor to avoid Groq TPM collision
-    logger.info("[TechLead] Waiting 70s before starting (TPM stagger)...")
-    time.sleep(70)
+    # When running sequentially (Groq-only mode), extra staggering just slows the run.
     logger.info("[TechLead] Starting judicial evaluation.")
     evidences = state.get("evidences", {})
     rubric_dims = state.get("rubric_dimensions", [])
@@ -322,7 +397,10 @@ def tech_lead_node(state: AgentState) -> Dict[str, Any]:
     errors: List[str] = []
 
     evidence_context = format_evidence_for_judges(evidences)
-    repo_dims = [d for d in rubric_dims if d.get("target_artifact") == "github_repo"]
+
+    # Evaluate ALL rubric dimensions (repo + pdf_report + pdf_images).
+    # Evidence context already includes RepoInvestigator, DocAnalyst, and VisionInspector findings.
+    repo_dims = rubric_dims
 
     try:
         llm = get_judge_llm(temperature=0.1)
@@ -330,7 +408,7 @@ def tech_lead_node(state: AgentState) -> Dict[str, Any]:
 
         for i, dim in enumerate(repo_dims):
             if i > 0:
-                time.sleep(10)
+                time.sleep(1)
             try:
                 prompt = build_judge_prompt(
                     dim["id"], dim["name"], evidence_context, rubric_dims
